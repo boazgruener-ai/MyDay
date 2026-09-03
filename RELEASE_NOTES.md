@@ -4,6 +4,15 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.3.2 — 2026-09-03
+
+**Long spoken answers cutting off mid-sentence, fixed.**
+- Found via live testing: asking about the history of mankind stopped abruptly partway through. Root cause confirmed by testing the exact API call directly - every response was capped at 600 output tokens regardless of topic, and a genuinely broad question landed at 552 tokens in testing, just under that cap, meaning ordinary phrasing variance alone was enough to run over and get cut off mid-sentence.
+- Raised the cap to 1536 tokens for real headroom.
+- Also fixed the underlying UX, not just the ceiling: added guidance so a broad open-ended question (history of X, how Y works) gets a short spoken overview covering the main points, then an offer to go deeper - the way a person answers in conversation - rather than Claude attempting one uninterrupted essay-length monologue every time. Verified live: the same question now finishes cleanly in 360 tokens and ends with "Want me to go deeper into any of these phases?"
+
+---
+
 ## 0.3.1 — 2026-09-03
 
 **Two bugs found during live testing of 0.3.0/0.2.0, fixed.**

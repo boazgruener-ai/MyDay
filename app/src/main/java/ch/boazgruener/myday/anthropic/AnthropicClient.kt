@@ -85,7 +85,12 @@ class AnthropicClient(private val apiKeyStore: ApiKeyStore) {
                 apiKey = requireApiKey(),
                 request = MessagesRequest(
                     model = "claude-sonnet-5",
-                    maxTokens = 600,
+                    // 600 was cutting real answers off mid-sentence - a genuinely open-ended
+                    // question (e.g. "describe human history") landed at 552 tokens in testing,
+                    // just under the old cap, so normal length variance alone was enough to
+                    // truncate it. 1536 leaves real headroom without letting a single spoken
+                    // answer run unreasonably long.
+                    maxTokens = 1536,
                     messages = messages,
                     system = systemPrompt,
                     tools = tools

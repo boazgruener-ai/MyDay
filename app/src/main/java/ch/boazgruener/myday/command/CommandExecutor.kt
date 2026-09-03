@@ -578,6 +578,11 @@ class CommandExecutor(
             an incomplete answer. When you do search or fetch, still answer in the same short
             spoken style as everything else - summarize the answer, don't read out a list of
             sources or a raw table.
+            For a broad open-ended question (e.g. "describe the history of X", "explain how Y
+            works") don't try to cover everything in one long monologue - give a short overview
+            covering the main points in a few sentences, then stop and ask if he wants you to go
+            deeper on any part, the way a person would in conversation rather than reciting an
+            essay.
             Reply in natural spoken English only, concise, as if reading the answer aloud -
             no markdown, no bullet points, no headers.
             Since every response is spoken aloud anyway, "play", "read out loud", "read to me",
