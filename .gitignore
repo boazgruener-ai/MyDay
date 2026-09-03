@@ -1,0 +1,20 @@
+*.iml
+.gradle/
+/local.properties
+local.properties.bak
+*.properties.bak
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+*.jks
+*.keystore
+/app/build
+/app/release
+
+# Client secret / OAuth config downloaded from Google Cloud Console
+client_secret_*.json

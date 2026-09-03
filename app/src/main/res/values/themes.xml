@@ -1,0 +1,5 @@
+<resources>
+    <!-- Bare system theme: Compose content renders its own Material3 theme via MaterialTheme,
+         this just avoids an ActionBar and system default styling around it. -->
+    <style name="Theme.Myday" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

@@ -1,0 +1,256 @@
+# Myday (PRD)
+
+**Author:** Boaz Gruener
+**Contributors:** Claude (Anthropic) — AI build partner
+
+## Relevant Documents
+- [RELEASE_NOTES.md](RELEASE_NOTES.md) — versioned changelog; see `versionName` in `app/build.gradle.kts` for the current version.
+- [V1-Setup-Guide.md](V1-Setup-Guide.md) — environment, tools, and API-key setup checklist (developer-facing).
+- [How-to-Install-Myday.md](How-to-Install-Myday.md) — plain-language install instructions for someone other than Boaz sideloading the app (friend/family-facing), paired with a published "Myday Install Guide" web page.
+- "Myday Architecture" — a published web page walking through the system's components and data flow in plain language, kept in sync with this document.
+
+## 1. About
+Myday is a personal, always-listening Android assistant, woken by saying "Myday." On the first wake of the day it gives Boaz a full spoken morning briefing — weather (with highs/lows, rain chance/type/timing, and an umbrella call), his Google Calendar schedule, and important emails from the last 24 hours — closing with a warm sign-off ("Have a nice day"), replacing the daily routine of opening three separate apps. Waking it again later the same day gets a simple "Hello Boaz, how can I help you?" instead of repeating the briefing, then handles whatever Boaz asks in his own words — not a fixed menu of recognized phrases. Requests about Calendar, Gmail, WhatsApp, weather, or travel time are always answered by the dedicated tool for that channel; anything genuinely outside that — a general-knowledge question, a translation, something needing current real-world information — is answered directly from Claude's own knowledge when possible, or via a capped, cost-aware live web search when it isn't, rather than refused outright the way earlier versions did. This still isn't a general-purpose assistant in the Siri/Google sense — there's no ambition to be a default answer-anything box — but a plainly out-of-scope question no longer just gets turned away. In the background it keeps his inbox tidy (filing subscriptions/invoices, junk, and low-engagement promotions; dismissing notifications for meetings that already ended). Later phases add hands-free write actions — schedule a meeting, reply to an email — always pausing for explicit confirmation before anything is actually sent or created, independent of how the request was phrased. WhatsApp integration is now live: Myday captures incoming WhatsApp messages (direct messages, plus any group message that mentions "Boaz" by name) directly from WhatsApp's own notifications, can read them back or search by contact/group on request, and can reply into an existing conversation by voice — always with spoken confirmation before sending, and only while that conversation's notification is still present on the phone. Boaz always speaks to Myday in English and Myday always answers in English, regardless of what language the underlying email or message was written in; content in other languages is translated for the briefing, and any reply Myday drafts is generated back in the original language of the email/message it's replying to. The build is intentionally staged — read-only Google integration first, write actions second, WhatsApp (which has no supported personal-account API) third, speaker verification fourth — so each layer of trust is earned before the next is added.
+
+## 2. Market Insights
+
+### Competitor Analysis
+This is a personal tool, not a commercial product, so this is a qualitative scan rather than a formal competitive analysis:
+- **Google Assistant routines / Gemini in Workspace** — can read a calendar or summarize an inbox, but routines are shallow (no cross-app "clean up and file" logic) and Gemini's Gmail features live inside Gmail, not as a proactive spoken daily briefing.
+- **Siri Shortcuts / Alexa Routines** — similar automation primitives, iOS/Amazon ecosystems, same shallowness for multi-step email/calendar hygiene.
+- **Tasker / Automate (Android)** — the closest technical precedent for what Myday needs at the OS level (NotificationListenerService, AccessibilityService), used by power users to automate exactly this kind of cross-app behavior, but with no voice interface or AI classification built in — you wire it yourself, node by node.
+- **Superhuman / Shortwave / SaneBox** — AI-assisted email triage products (auto-categorization, "reply required" detection) but email-only, no calendar or WhatsApp integration, no voice.
+- **Otter.ai and similar** — voice-native but scoped to meeting transcription, not daily briefing or cross-app action.
+
+No existing product combines a spoken daily briefing + email/calendar hygiene actions + personal WhatsApp triage + voice-driven send/schedule for an individual consumer. That gap is mostly explained by WhatsApp having no official personal API, which is exactly the piece this project defers.
+
+### Market Analysis
+No market sizing was performed — v1 has exactly one user (Boaz), built for personal use. If it proves valuable, the adjacent space ("AI copilots for personal inbox/calendar triage") is active and increasingly crowded at the enterprise/prosumer end, but the "voice-first, single spoken briefing, cross-channel" angle is not something we found addressed directly. Any commercialization decision is out of scope for this PRD.
+
+### Technology Analysis
+What AI-specific solutions are competitors leveraging?
+- Cloud LLMs for summarization and reply drafting (Gemini in Gmail, Superhuman AI).
+- Rule-based / proprietary-model inbox categorization (Gmail's own Promotions/Social tabs, SaneBox's folder model).
+- Platform voice assistants (Google Assistant, Siri) for command parsing, generally closed and not extensible to arbitrary third-party inbox logic.
+
+None of the above operate on WhatsApp personal accounts — there is no public precedent to leverage there; Myday's WhatsApp phase will need original design work later.
+
+### Customer Segments
+- **v1**: a single user — Boaz — building this for his own daily use.
+- **Potential future segment** (not committed to): busy, multi-channel professionals (Gmail + Google Calendar + WhatsApp) who want a hands-free morning briefing and inbox hygiene without hiring a human assistant. Purely hypothetical until v1 is validated personally.
+
+### User Personas
+**"Boaz, the multi-channel professional."** Manages Gmail, Google Calendar, and WhatsApp (personal chats plus several high-signal group chats — family, close friends, sports groups) every day. Wants a ~30-second spoken catch-up each morning instead of opening three apps, and wants to act by voice during the day (schedule, reply, message) without typing. Comfortable sideloading an app and granting sensitive Android permissions for personal automation in exchange for convenience, and understands there's residual risk (e.g. around WhatsApp automation) that comes with that trade-off.
+
+## 3. The Problem
+
+### Use Cases
+1. Get a spoken summary of today's weather, calendar, and important email — once, first thing.
+2. Have already-finished meeting notifications automatically cleared from the phone.
+3. Have payment/invoice/receipt emails automatically filed to a dedicated label, junk automatically moved to Junk, and low-engagement promotional senders automatically routed to Promotions — without manual triage. *(All three built.)*
+4. Hear about new personal WhatsApp direct messages and any group message that mentions Boaz by name — not a curated VIP list, any group he's in. *(built)*
+5. Schedule a meeting by voice, with the assistant finding a free slot and confirming before sending the invite.
+6. Reply to an email, or reply to a WhatsApp message, by speaking the reply and confirming before it goes out. *(WhatsApp reply: built, but only into an existing/recent conversation whose notification is still present — starting a brand-new message to someone who hasn't texted recently is not yet supported.)*
+
+### Pain Points
+- Checking Gmail, Calendar, and WhatsApp separately every morning costs 10–15 minutes of manual app-switching before the day even starts.
+- Inbox clutter (subscriptions, junk, promotions) accumulates because filing it by hand is tedious, so it's mostly never done.
+- Calendar notifications for meetings that already happened linger and add visual noise.
+- Time-sensitive WhatsApp messages get buried among lower-priority chats, especially in group chats.
+- Replying or scheduling while out and about means typing on a small screen, which is slow and easy to defer.
+
+### Problem Statement
+Boaz, a busy professional managing Gmail, Google Calendar, and WhatsApp across personal and group conversations, spends 10–15 minutes every morning manually checking three separate apps to catch up, and throughout the day loses focus switching between apps to triage messages, file email, and schedule meetings — time and attention that could go toward actual work instead.
+
+### Hypotheses and Mission Statement
+By giving Boaz a single voice-first assistant that proactively briefs him each morning and lets him act on email, calendar, and (later) WhatsApp hands-free during the day, we will make daily digital triage faster, less distracting, and require near-zero manual app-switching.
+
+## 4. The Solution
+
+### Ideation
+- Daily spoken briefing: weather (home location, with today's low/high, rain chance/type/timing, and an umbrella recommendation) + today's calendar + important emails from the last 24h.
+- Calendar hygiene: auto-dismiss device notifications for meetings that have already ended.
+- Email auto-filing: label payment/invoice/receipt emails into a dedicated `Myday/Payments` folder (built as a deterministic subject-line keyword match — "payment," "invoice," "receipt" — not an AI judgment call, since financial mail shouldn't depend on a model's guess to end up somewhere findable); move junk to Junk; move promotional mail from senders the user never opens into Promotions.
+- WhatsApp triage: surface new personal DMs and messages in named VIP groups; flag messages that read as needing a response. *(deferred)*
+- **Open-ended natural-language commands and questions** — not a fixed menu of supported phrasings. Anything technically achievable against the connected APIs (Calendar, Gmail, and later WhatsApp) should be askable in the user's own words; the read/write distinction, not a predefined command list, is what determines whether confirmation is required. Illustrative examples (not an exhaustive list):
+  - "Morning brief" — repeat the same daily briefing on demand, not just automatically on the first wake of the day.
+  - "When is my next meeting, and where? If it's online, say which platform (e.g. Zoom)."
+  - "When is my last meeting today?"
+  - "Do I have any unconfirmed meetings this week? If so, let's go through them and decide whether to confirm." — a multi-turn conversation over a list, not a single fire-and-forget query.
+  - "Did I get any email today from X?" — search, not just the automatic last-24h scan.
+
+### Leveraging AI
+AI is essential, not incidental, because the core tasks are all natural-language judgment calls that static rules can't handle reliably:
+- Classifying an arbitrary email as "junk" vs "a promo from a sender I never open" vs "actually important" requires reading and understanding content, not just matching sender domains — this part is genuinely an AI judgment call. Payment/invoice/receipt filing turned out not to need this: a plain subject-line keyword check is reliable enough on its own, so it's handled deterministically rather than by asking Claude.
+- Deciding whether a WhatsApp message "is asking me to respond or do something" is an intent-detection problem.
+- Handling open-ended requests ("do I have any unconfirmed meetings this week?", "did I get an email from X today?") requires Claude to decide *which* API calls fulfill a given request and compose them — a tool-use/function-calling problem, not a fixed intent-to-action lookup table. A rigid command grammar would fail the moment a request was phrased slightly differently than expected; free-form language only works with a model that can reason about intent.
+- Turning a spoken command like "schedule a meeting with Dana, invite Tom, for tomorrow, whenever I'm free" into a structured action (attendees, date, duration, constraint-checked against free/busy) is a language-to-structure parsing problem.
+- Producing a natural-sounding ~30-second spoken summary from a pile of raw calendar/email data — including a genuinely useful weather readout (highs/lows, rain timing and type, an umbrella call) rather than just a temperature — is a summarization and judgment problem, not a template-fill.
+
+Speech-to-text and text-to-speech models are what make the interface voice-first at all.
+
+### Feature Prioritization (RICE)
+
+| Feature | Phase | Reach | Impact (1-10) | Confidence (1-10) | Effort (1-10) | Score (R×I×C)/E |
+|---|---|---|---|---|---|---|
+| Google OAuth + Calendar/Gmail read integration (foundation) | V1 | 100% | 10 | 9 | 6 | 15.0 |
+| Always-on wake word ("Myday") | V1 | 100% | 9 | 6 | 7 | 7.7 |
+| Daily spoken briefing (weather + calendar + important email) | V1 | 100% | 9 | 8 | 5 | 14.4 |
+| Past-meeting notification cleanup | V1 | 100% | 5 | 8 | 3 | 13.3 |
+| Email auto-filing (subscriptions/invoices, junk, promotions) | V1 | 100% | 7 | 6 | 6 | 7.0 |
+| Voice-driven meeting scheduling w/ confirmation | V2 | 100% | 8 | 6 | 7 | 6.9 |
+| Voice-driven email reply w/ confirmation (with translation) | V2 | 100% | 7 | 6 | 6 | 7.0 |
+| WhatsApp triage (read personal + VIP groups) | V3 | 100% | 8 | 5 | 6 | 6.7 |
+| WhatsApp voice-driven send w/ confirmation | V3 | 100% | 7 | 5 | 6 | 5.8 |
+
+*(Reach is 100% for every row because there is exactly one target user in v1.)*
+
+### AI MVP
+Yes — the MVP is entirely AI/API-driven, with no custom-trained model beyond a one-time, locally-trained openWakeWord model for the "Myday" phrase (no vendor account, trained against synthetic speech samples). It combines: that on-device wake-word engine, Android's `SpeechRecognizer` for English voice-to-text and `TextToSpeech` for English spoken output, and the Claude API for command parsing (voice transcript → structured action), email content classification, translation (non-English content → English for the briefing; English-dictated intent → the original content language for a drafted reply), WhatsApp message intent detection (V3), and summarization (raw calendar/email data → spoken briefing script). Everything is prompt-engineered against a general-purpose LLM rather than a bespoke classifier.
+
+### Roadmap
+1. **V1 — Always-on wake word, Google integration, inbox cleanup, and a first slice of write mode**: on-device wake-word engine listening continuously for "Myday"; OAuth into the user's Google account; read today's Calendar events and last-24h Gmail; Claude-generated spoken briefing (rich weather + calendar + important email, using the phone's actual location) via English TTS; open-ended natural-language queries beyond the automatic briefing, including reading full email bodies and event descriptions; a multi-turn conversation session (no repeated wake word needed within ~120s of silence); fuzzy name matching against phone contacts and known correspondents, to recover from speech-to-text errors on names; auto-dismiss notifications for ended meetings and voice-echo Calendar's own reminder notifications; Claude-classify and auto-file subscriptions/invoices, junk, and low-engagement promotions; proactive "time to leave" travel alerts for non-online meetings with a location (Google Maps Distance Matrix). Two write actions were pulled forward from V2 ahead of schedule, both spoken-confirmation-gated per the rule below: accepting/declining/tentatively-responding to a calendar invite, and archiving an email. **Known gap, called out here on purpose:** these run before V4's speaker verification exists, so right now confirmation only checks that *a* "yes" was heard, not that it came from Boaz specifically — anyone within earshot during an open conversation session could confirm a pending action. Acceptable for now as a solo-user personal device; revisit before letting anyone else use the app.
+2. **V2 — Write mode, continued**: compose and send email replies/new emails (voice → English transcript → Claude drafts in the target language → confirm → send); parse spoken scheduling requests, check free/busy, confirm, and create new Calendar invites.
+3. **V3 — WhatsApp integration** *(mechanism evaluated below; read + reply built and live)*: read personal DMs and any group message that mentions Boaz by name (not a curated VIP list — every group he's in), stored locally for query/playback on request; reply into an existing/recent conversation by voice via the notification `RemoteInput` action, always with spoken confirmation before sending. **Remaining gap, not yet built**: starting a brand-new message to a contact with no live notification (the prefill/manual-tap fallback below); also, the "needs a response" flagging described in earlier drafts of this document was simplified in the actual build to a plain name match (whether "boaz" appears in the group message text), not an AI intent classifier — a possible future enhancement, not currently implemented.
+4. **V4 — Speaker verification**: before executing any state-changing action (send email, send WhatsApp message, create calendar invite), verify the spoken command came from Boaz specifically, not just "a voice." Scoped deliberately narrow — 1:1 verification against a single enrolled voiceprint (Boaz's own), not full multi-person speaker identification, which is a substantially simpler ML problem. Addresses a real gap identified during V1 wake-word testing: without this, anyone within earshot who triggers the wake word and speaks a command can get it executed, since confirmation as designed so far is spoken, not a check of *who* is speaking.
+5. **Further future phases (unscheduled, deliberately deferred)** — kept off the roadmap for now so V1-V4 stay focused on a lean, working, channel-scoped service rather than growing into something broader before the basics are proven:
+   - **Session speaker consistency**: once other people (e.g. family members) are also using the app, add a lighter check that doesn't require full multi-person identification — just verify that every command within one voice session matches the same speaker who triggered that session's wake word, preventing a mid-session handoff to a different speaker.
+   - **Personalization / habit learning**: Myday picking up Boaz's own recurring patterns over time (e.g. that "my usual team meeting" always means a specific event) — a genuine memory/context feature, distinct from the phrasing-flexibility Claude already provides for free.
+   - ~~**Capabilities beyond the connected channels**: web search, general-knowledge questions...~~ *(Built, 0.1.3 — general-knowledge questions answered directly, live web search as a capped, cost-aware fallback for anything needing current information. Still not an ambition to become a general-purpose assistant like Siri/Google — see the About section and Technical Architecture below for the actual scope and guardrails.)*
+6. **Later / optional**: Play Store readiness, only if the app has proven itself in daily personal use.
+
+### WhatsApp Integration Options (V3 Research)
+WhatsApp has no official API for a personal (non-Business) account, so every option here is a workaround with different capability/risk trade-offs. Researched and compared:
+
+| Approach | How it works | Can read? | Can send? | Risk |
+|---|---|---|---|---|
+| **Notification-native (recommended)** | Android `NotificationListenerService` reads incoming WhatsApp notifications (sender, group name, message text) in real time; sending a **reply** to an existing conversation is done by firing the `RemoteInput` action WhatsApp itself attaches to its notifications — the same mechanism as the notification-shade "Reply" quick action — with no UI simulation or account automation involved. | Yes, in real time as notifications arrive | Replies to an existing/recent conversation only | Very low — this is a published Android/notification API, not a WhatsApp protocol hack |
+| **Accessibility-automation / prefill** | For messages to a contact with no live notification to reply to (a cold-start "message XYZ" command): either simulate typing + tapping Send via an `AccessibilityService`, or open WhatsApp's chat-prefill deep link with the text already typed and let Boaz tap Send himself. | No | Any contact/group, prefill variant needs a manual final tap | Prefill: very low. Full auto-tap: fragile (breaks on WhatsApp UI updates) and a soft ToS/detection risk since it simulates UI interaction |
+| **Protocol-level library (Baileys / whatsapp-web.js)** | Runs a companion "linked device" session that speaks WhatsApp's multi-device WebSocket protocol directly (Baileys) or drives a hidden WhatsApp Web browser session (whatsapp-web.js), giving full read/send access to all chats and groups, no notification-timing gaps. | Yes, complete history | Yes, unrestricted | **High** — this is explicitly against WhatsApp's Terms of Service; current field reports show bans happening anywhere from days to a few months of use, and a ban lands on the real personal number, wiping out normal WhatsApp use on that number too |
+| **WhatsApp Business Platform (Cloud API)** | Meta's official API | N/A | Template-based, business-initiated only | Ruled out for this project: personal numbers can't use it without converting to a Business number, existing personal groups aren't supported at all, and even the 2026 Groups API caps a business at 8 participants per group and can't join a pre-existing personal group |
+
+**Recommendation**: use the notification-native approach as the backbone of V3 (read everything; reply-in-place via `RemoteInput`), and fall back to prefill-and-manual-tap (not full accessibility automation) for the one gap it leaves — proactively starting a message to someone who hasn't texted recently. Avoid Baileys/whatsapp-web.js-style account automation: the downside (losing Boaz's actual personal WhatsApp if the number gets banned) is disproportionate to the convenience gained, especially since the notification-native approach already covers the read side and most of the reply side of what was asked for. This should be revisited only if V3 in practice turns out to need capabilities the notification-native approach can't provide.
+
+**Status**: the notification-native read + reply mechanism was built and confirmed working on-device — no protocol-level automation library was used, matching the recommendation above. The prefill-and-manual-tap fallback for cold-start messages has not been built yet.
+
+Sources: [Baileys ban-risk reports (GitHub issue)](https://github.com/WhiskeySockets/Baileys/issues/2309), [WhatsApp automation ban risk overview](https://blog.kraya-ai.com/whatsapp-automation-ban-risk), [WhatsApp Groups API 2026 guide](https://www.unipile.com/whatsapp-group-api/), [Meta Groups API docs](https://developers.facebook.com/documentation/business-messaging/whatsapp/groups), [Android NotificationListenerService reference](https://developer.android.com/reference/android/service/notification/NotificationListenerService), [RemoteInput / notification voice reply](https://medium.com/@polidea/how-to-respond-to-any-messaging-notification-on-android-7befa483e2d7)
+
+### Technical Architecture
+Single Android (Kotlin) client app, sideloaded — no backend server in v1:
+- **Wake word**: an always-running, on-device wake-word engine — [openWakeWord](https://github.com/dscripka/openWakeWord) (open-source, Apache-2.0, via the `xyz.rementia:openwakeword` Kotlin/ONNX Runtime library, published on Maven Central) with a custom-trained "Myday" keyword — inside a foreground service with a persistent notification (required by Android for continuous microphone access) — chosen over streaming raw audio to any cloud STT continuously, which would be far heavier on battery, data, and privacy for a phrase that's rejected 99% of the time. *(Switched from the originally-planned Picovoice Porcupine after Picovoice discontinued its free personal tier on 2026-06-30 in favor of a 7-day enterprise trial gated behind a company-email signup requirement — not a fit for an indefinitely-running personal app. V1 trains a single phrase, "Myday" alone, rather than also training "Hey Myday" — simpler to get right first; a second phrase can be added later without re-architecting anything.)*
+- **Voice I/O**: once woken, Android `SpeechRecognizer` (STT, English-only — Boaz's spoken input is always English) captures the actual command; `TextToSpeech` (English-only) speaks every response back.
+- **Translation/localization layer**: Claude handles all cross-language work — translating non-English email/message content into English for the briefing, and translating an English-dictated reply into the target language (German, Swiss German, or Hebrew) to match the original email/message's language when composing a reply (V2+).
+- **Google integration**: OAuth 2.0 (Google Sign-In), Gmail API (read + labels/modify), Calendar API (read + free/busy + insert events).
+- **AI layer**: direct calls from the app to the Claude API, using tool-use/function-calling so Claude can decide which API(s) a given natural-language request needs and compose them, rather than a fixed intent-to-action lookup table. Read-only tools (list events, search email, check free/busy) execute directly; any tool that changes state (send, create, file) always stops for explicit confirmation before running, regardless of how the request was phrased.
+- **Web search (built, 0.1.3)**: Anthropic's native, server-hosted web search tool, declared alongside every other tool in the same single tool-use call — not a second LLM pass. Runs entirely on Anthropic's servers and resolves within the same conversational turn, so it needed no new dispatch code in the app, only a data-model change to let the request's tool list hold a different shape alongside the app's own custom tools. Capped at 3 searches per request and biased toward Boaz's home area (Sonnenberg/Zurich, CH — a static approximation, not live GPS) for location-flavored questions. The system prompt establishes priority: a specific channel tool first, then Claude's own knowledge for anything it's already confident about, and web search only as a last resort for current/real-world information — since unlike everything else here, each search has a real per-use cost.
+- **Local state**: on-device store (Room/DataStore) tracking "briefing already given today" and lightweight caches.
+- **Weather**: Open-Meteo (no API key required) for Sonnenberg, 8703, Switzerland — both the `current` and `daily`/`hourly` forecast fields (today's low/high, precipitation probability and type, and timing) so Claude can produce a genuinely useful readout, including an umbrella recommendation, not just a temperature.
+- **(V3) WhatsApp — built**: `NotificationListenerService` captures incoming message notifications in real time and stores them in a local database (message text, sender, group/DM flag, whether Boaz's name was mentioned, and the originating notification's key), queryable by voice (e.g. "brief me on WhatsApp," "what did the Family group say," "the latest from Jamie"). Replies are sent by firing the same `RemoteInput` action WhatsApp attaches to its own notifications — the identical mechanism as the notification-shade "Reply" quick action — always with spoken confirmation first; because that notification can be replaced or dismissed at any time after capture, sending re-checks the live notification at the moment of reply (by its saved key, falling back to a match on conversation name) rather than trusting anything cached from capture time. See the WhatsApp Integration Options research above for the full evaluation; the prefill-and-manual-tap fallback for cold-start messages (no live notification to reply to) has not been built yet.
+- **(V4) Speaker verification**: a single enrolled voiceprint (Boaz's) checked against the command audio before any state-changing tool executes — see Risks and the Roadmap for scope and reasoning.
+
+Data flow: wake-word engine hears "Myday" → foreground service starts full STT → English transcript → Claude (intent parsing via tool-use, and translation if composing a non-English reply) → Google/WhatsApp APIs (fetch or act) → Claude (summarize/translate to English, if briefing) → English TTS → spoken to Boaz. Every outbound or state-changing action (send email, send WhatsApp message, create calendar invite) stops for explicit user confirmation before executing, independent of what specific words triggered it.
+
+### Assumptions and Constraints
+- Sideloaded APK, originally Boaz's personal phone only — now also handed directly to a handful of trusted people (family/friends/colleagues) who want to try it, via a shared install file and a plain-language install guide, still short of any public/Play Store distribution. See Roll-out strategy below for how each additional person is onboarded.
+- Single Google account, single physical Android device.
+- No backend service in v1 — the app calls the Claude API directly. Each installation holds its own Anthropic API key, entered at runtime via a settings screen (not baked in at build time) and encrypted at rest with an Android-Keystore-backed key (via Tink) before being written to local storage — built specifically so a handful of other people (family/friends/colleagues) can sideload the app and use their own Anthropic account/billing instead of Boaz's. *(Built and confirmed compiling; see the Anthropic API Key section of the app's main screen.)*
+- V1 trains and listens for a single wake phrase: "Myday" alone (not "Hey Myday"). Simpler to get right first; a second phrase ("Hey Myday") can be added later without re-architecting anything, since the wake-word engine already supports listening for multiple trained keywords simultaneously. (Earlier drafts of this document mistakenly wrote a considered second phrase as "Mayday" — corrected; it was always meant to be the app name alone, not the distress call word.) *(Confirmed by the user on 2026-08-24.)*
+- Content (emails, WhatsApp messages) may be in English, German, Swiss German, or Hebrew; Boaz's spoken commands to Myday are always English, and Myday's spoken responses are always English. Any reply Myday drafts on Boaz's behalf defaults to the original language of the email/message being replied to (V2+).
+- Myday is deliberately channel-scoped (Calendar, Gmail, WhatsApp) for anything that *acts* on Boaz's data or accounts — it never performs a real action outside those connected APIs. *(0.1.3: this no longer extends to answering — a general-knowledge question gets answered directly from Claude's own knowledge, or via a capped live web search for anything needing current information, rather than refused. Still not a general-purpose assistant in the Siri/Google sense: no ambition to be a default answer-anything box, and web search never triggers for anything the dedicated tools already cover.)* Natural-language flexibility (understanding differently-phrased requests) comes for free from using an LLM to parse requests, not from a separate learning system; genuine personalization/habit-memory is a distinct, deliberately deferred future idea — see Roadmap.
+- WhatsApp has no supported personal-account API; V3 uses the notification-native approach (see WhatsApp Integration Options above) rather than a protocol-level automation library, to avoid ban risk to Boaz's personal number. *(Built and live.)*
+
+### Risks
+- **WhatsApp automation risk** (V3): mitigated by design — using the notification-native `RemoteInput` reply mechanism (a published Android API, not a protocol hack) instead of a companion-account library like Baileys, whose ban risk is real and would cost Boaz his personal number's WhatsApp entirely if triggered. The one remaining gap (cold-start messages to a contact with no live notification) is meant to use prefill-and-manual-tap rather than full UI automation, trading a small amount of convenience for near-zero risk, but has not been built yet. **Status: the read + reply mechanism is implemented and confirmed working as designed.**
+- **Always-on wake word**: continuous microphone listening requires a persistent foreground-service notification (Android requirement) and has real battery/privacy cost; an on-device wake-word engine (not continuous cloud STT) keeps this bounded, but it's a meaningfully bigger footprint than the tap-to-talk alternative that was originally assumed.
+- **Google OAuth verification**: sensitive scopes (Gmail modify/send, Calendar) are fine for personal testing with the developer's own account as a test user, but would require Google's verification review before any public/Play Store release.
+- **Misclassification risk**: the LLM could mis-file a legitimate email as junk/promo, or auto-dismiss a notification incorrectly — mitigated by conservative defaults and keeping filing actions reversible (labels/archiving, not deletion).
+- **API key exposure**: mitigated by design — each person's Anthropic API key is entered at runtime (never baked into the shared APK) and encrypted at rest via an Android-Keystore-backed key, so it isn't extractable by decompiling the app the way a build-time-embedded key would be. It's still only as safe as the device itself (a rooted or physically compromised device could still get at it) — acceptable for the personal-device threat model this app targets, same as everything else on the phone.
+- **Voice/parsing errors**: misheard commands could produce wrong structured actions — mitigated by the mandatory confirmation step before every send/create action.
+- **No speaker verification until V4 (accepted risk)**: confirmation as designed through V3 is spoken, not identity-checked — anyone within earshot who triggers the wake word can have a command executed, including a spoken "yes" to confirm. This is a real gap: V2 (email/calendar writes) and V3 (WhatsApp sends) both ship real state-changing actions before V4's speaker verification exists. Explicitly accepted by Boaz rather than adding an interim mitigation (e.g. requiring a physical on-screen tap instead of spoken confirmation) — worth remembering this window exists, especially around kids/other people who might pick up the phone and talk to it before V4 ships.
+
+## 5. Requirements
+
+### User Journeys
+- **Morning briefing (first wake of the day)**: Boaz says "Myday" for the first time that day → app fetches weather (including highs/lows, rain chance/type/timing, umbrella call), today's Calendar, and last-24h Gmail → Claude drafts a spoken English summary → TTS reads it aloud, closing with a sign-off ("Have a nice day").
+- **Ad-hoc voice command or question (any later wake that day)**: Boaz says "Myday" → app responds "Hello Boaz, how can I help you?" rather than repeating the briefing → Boaz speaks a request in English, in his own words, not a fixed phrase from a menu, but scoped to Calendar/Gmail/WhatsApp only (not general knowledge or anything outside those channels) → Claude decides which read (and, if needed, write) actions fulfill it, translating to the target language if drafting a reply → for anything read-only, the app just answers; for anything that changes state, it speaks back a confirmation prompt in English first → on explicit "yes," the app executes it (send, create, reply). Some requests are conversational rather than one-shot (e.g. reviewing a list of unconfirmed meetings one at a time).
+- **Background hygiene**: without any user action, the app periodically checks for ended meetings to dismiss and new email to classify/file.
+
+### Functional Requirements
+- Listen continuously for the wake phrase "Myday" and begin capturing a command immediately on detection.
+- Authenticate via Google OAuth with Gmail and Calendar scopes.
+- Detect the first wake of each calendar day and deliver the full briefing, closing with a sign-off, before handling any other request that session; on any subsequent wake that same day, greet with "Hello Boaz, how can I help you?" instead and wait for the request.
+- Fetch and read back today's Calendar events and the weather for Sonnenberg, 8703, Switzerland — including today's low and high temperature, chance of rain, type of precipitation (e.g. thunderstorm, shower, light rain), roughly when in the day it's expected, and a take-an-umbrella-or-not recommendation.
+- Classify each email received in the last 24 hours (in English, German, Swiss German, or Hebrew) and summarize the important ones, in English, in the briefing.
+- Classify inbox mail into {payment/invoice/receipt, junk, low-engagement promotion, other} and apply the corresponding Gmail label/folder action (V1 — organizational actions only, no content creation; built). Payment/invoice/receipt is a deterministic subject-keyword match ("payment," "invoice," "receipt") checked ahead of the AI-judged junk/promotion path, filing to `Myday/Payments`.
+- Detect Calendar events that have ended and dismiss their device notifications (V1).
+- Support open-ended natural-language requests against Calendar and Gmail — not a fixed set of recognized phrasings — for anything the underlying APIs technically support: e.g. re-triggering the morning brief on demand, "when's my next/last meeting today (and where — naming the platform if it's a video call)," "do I have any unconfirmed meetings this week," "did I get email today from X." Requests may be conversational/multi-turn (e.g. stepping through a list of unconfirmed meetings one at a time), not only single-shot. Phrasing flexibility comes from Claude's own language understanding, not a separate "learning" system — no explicit training or personalization store is required for this alone.
+- Stay strictly scoped to the connected channels (Calendar, Gmail, WhatsApp) for anything that acts on Boaz's data or accounts — never act outside those APIs, unlike a general-purpose assistant (Siri, Google Assistant). *(Built, 0.1.3)* For answering (not acting): use a specific channel tool when the request is about Calendar/Gmail/WhatsApp/weather/travel time; otherwise answer from general knowledge directly, or via a capped web search (`max_uses` = 3 per request) when the question needs current/real-world information — never search for something already known confidently, and never in place of a dedicated tool that already covers the request.
+- *(V2)* Parse free-form voice scheduling requests into {attendees, date/time, duration}, check Calendar free/busy, and propose a time; accept/decline calendar invitations by voice.
+- *(V2)* Parse an English-dictated reply/message and draft it in the original language of the email/message being replied to (German stays German, Hebrew stays Hebrew, etc.).
+- *(V3 — built)* Read WhatsApp personal DMs and any group message that mentions Boaz by name, in real time via notifications, stored locally for query/playback on request; reply into an existing/recent conversation via the notification `RemoteInput` action, always with spoken confirmation before sending. *(Not yet built: an AI "needs a response" classifier — the shipped version detects group mentions via a plain name match, not intent — and prefill-and-confirm for cold-start messages to a contact with no live notification.)*
+- *(V4)* Verify the speaker of any state-changing command against a single enrolled voiceprint (Boaz's) before executing it.
+- Require an explicit confirmation step before any outbound or state-changing action, regardless of how it was phrased: sending an email, creating a calendar invite, or sending a WhatsApp message. Read-only requests (queries, searches, status checks) never require confirmation.
+
+### Non-functional Requirements
+- **Latency**: the daily briefing should complete (fetch → summarize → speak) within a few seconds of the trigger.
+- **Privacy**: email content is sent to the Claude API only as needed for classification/summarization, not persisted beyond what's needed for same-day dedupe. WhatsApp message text is stored locally on-device indefinitely (see Data Retention below) and sent to the Claude API only when Boaz actually asks about WhatsApp.
+- **Security**: OAuth tokens are handled by Google Play Services' own cache, never persisted by the app itself. The Claude API key is entered per-device and encrypted at rest via an Android-Keystore-backed key (Tink AEAD) before being written to local storage; never logged in plaintext.
+- **Reliability**: no irreversible action (send, permanent delete) ever executes without explicit user confirmation.
+- **Offline behavior**: a voice trigger with no connectivity should fail gracefully with a clear spoken/visual error, not hang or crash.
+- **Battery**: the always-on wake-word listener must use an on-device, low-power engine — not continuous cloud audio streaming — to keep standby battery drain acceptable for all-day use.
+- **Localization**: source content (email/WhatsApp) must be handled correctly in English, German, Swiss German, and Hebrew (VIP WhatsApp group names and message text are in Hebrew). Boaz's voice input to Myday is always English and every spoken response from Myday is always English; only drafted replies (V2+) are produced in the original content language rather than English.
+
+### AI & Data Requirements
+- **Data sources**: Gmail API (message metadata + body for the last 24h), Google Calendar API (today's events, free/busy), Open-Meteo (weather for Sonnenberg, 8703, CH), WhatsApp notification text (captured live via `NotificationListenerService`, stored locally), and — for general questions outside all of the above — Anthropic's own hosted web search tool, capped and used only as a fallback (see Technical Architecture).
+- **No training data required** — this is prompt-based use of a general-purpose LLM (Claude) for both classification/parsing and English ⇄ German/Swiss German/Hebrew translation, not a fine-tuned model. The wake-word engine (openWakeWord) needs a one-time custom-keyword training step for "Myday" — done locally/via a free training notebook against synthetic speech samples, not by recording Boaz's own voice repeatedly, and with no vendor account involved.
+- **Data retention**: email content is processed per-request and not stored beyond lightweight state needed to avoid re-summarizing the same item twice in one day. WhatsApp messages are the one exception — captured messages are kept indefinitely in a local on-device database (no expiry), a deliberate choice confirmed with Boaz so past messages stay queryable ("what did X say last week"); nothing WhatsApp-related leaves the device except the message text sent to Claude when Boaz actually asks about it.
+
+## 6. Challenges
+- WhatsApp has no supported personal-account API — evaluated above, and de-risked by design (notification-native over protocol automation); the read + reply mechanism has now been validated in practice. The cold-start "message a contact" gap and its prefill/manual-tap fallback have not been built yet.
+- Reliable always-on wake-word detection ("Myday") with low false-trigger/false-miss rates and acceptable battery cost is unproven until built and lived with day-to-day.
+- Getting free/busy lookup and natural-language date/time parsing right for scheduling commands (V2).
+- False positives/negatives in email classification directly affect trust — a single wrongly-filed important email could sour daily use.
+- Translation quality (German/Swiss German/Hebrew ⇄ English) is untested, especially Swiss German, which varies by dialect and has no standardized written form — this could affect both briefing accuracy and drafted-reply quality (V2+).
+- This is a solo side project — bandwidth is the real constraint on pace through the roadmap above.
+
+## 7. Positioning
+
+| Use Case | Pain Point | Possible Solutions | Impact of Solution |
+|---|---|---|---|
+| Morning catch-up | 10–15 min/day spent opening 3 apps | Single spoken daily briefing | Reclaims time, reduces morning friction |
+| Calendar clutter | Stale notifications for finished meetings | Auto-dismiss past-meeting notifications | Cleaner notification shade, less noise |
+| Inbox clutter | Manual filing of subscriptions/junk/promos never happens | AI-classified auto-filing | Consistently tidy inbox with no manual effort |
+| Missing time-sensitive chats | Important WhatsApp messages buried in volume | Personal DM + name-mention triage, on-demand voice query *(built)* | Faster response to what actually matters |
+| Slow mobile replies | Typing replies/messages on the go is slow | Voice-to-text with confirm-before-send | Faster, hands-free communication without sacrificing control |
+
+## 8. Measuring Success
+
+### Metrics
+Since this is a single-user project, success is tracked qualitatively/personally rather than through product analytics:
+- The daily briefing is actually used each morning, before any other app is opened.
+- Reduced time spent manually checking Gmail/Calendar/WhatsApp.
+- Low rate of manual correction needed after auto-filing (a proxy for trust in the classification).
+- Voice commands completed end-to-end without falling back to typing.
+
+### AI-specific Metrics
+- **Email classification precision** — false positives (a real important email mis-filed as junk/promo) are far more costly than false negatives, so precision is weighted over recall.
+- **Command-parsing accuracy** — whether a spoken command's structured interpretation (attendees, date/time, message content) correctly captures intent.
+- **Summarization faithfulness** — the spoken briefing must not state a meeting time, sender, or fact that isn't actually present in the source Calendar/Gmail data.
+
+### What is your North Star Metric?
+Number of mornings Boaz gets a complete, accurate, hands-free daily briefing without needing to manually open Gmail, Calendar, or WhatsApp.
+
+## 9. Launching
+
+### Stakeholders & Communication
+Boaz is the sole stakeholder and end user; Claude is the build partner. No external communication plan is needed at this stage.
+
+### Roll-out strategy
+v1 is sideloaded, not published to the Play Store — evaluated and deliberately deferred (see Play Store readiness below). Google's OAuth consent screen stays in "Testing" publish status, which allows up to 100 named test users with no verification review; each additional person Boaz wants to try the app is added by email address on that screen before they can sign in with their own Google account. Play Store publication is only reconsidered after extended personal daily use has validated the briefing's accuracy and the auto-filing behavior's trustworthiness. The WhatsApp integration approach (and its associated ToS/risk trade-offs) has been decided and built as V3 (notification-native read + reply, no protocol-level automation) — see WhatsApp Integration Options above.
+
+**Sharing with other people (built, first friend onboarding in progress)**: rather than a public release, Boaz can now hand the app directly to individual people he trusts:
+1. Add their Gmail address as a Google OAuth test user (above).
+2. Send them the built APK (`Myday.apk`, ~105 MB — too large for most email attachments, shared via a large-file transfer link instead) plus the plain-language install guide (How-to-Install-Myday.md / the published "Myday Install Guide" web page).
+3. They sideload it, grant the same permissions Boaz did, sign in with their own Google account, and create their own free Anthropic API key rather than using Boaz's — see the Anthropic API key entry under Technical Architecture. This is what makes per-person sharing possible without Boaz paying for or exposing his own account: no backend, no shared credentials, each installation is fully self-contained to the person running it.
+
+**Play Store readiness (evaluated, explicitly not pursued for now)**: publishing publicly was assessed and set aside as disproportionate to the project's actual goal (a handful of trusted testers, not public distribution). The real blockers, in order of cost: (1) Gmail's `gmail.modify` scope is a Google-designated restricted scope, and moving off "Testing" status into public review requires an annual third-party security assessment (Google's CASA program) — real recurring cost, not a one-time hurdle; (2) the WhatsApp notification-capture-and-reply mechanism, while built on published Android APIs, is exactly the kind of `NotificationListenerService` usage Play Store's human reviewers manually scrutinize, with a real risk of rejection even though nothing about it is technically prohibited; (3) the app is still single-account/single-location by assumption in several places (not yet a real multi-tenant product); (4) a public release would need a backend to broker API keys rather than each person bringing their own, which the per-device key entry above was deliberately built to avoid needing. None of this blocks trusted-tester sharing, which sidesteps all four points — only a future public release would need to revisit them.
