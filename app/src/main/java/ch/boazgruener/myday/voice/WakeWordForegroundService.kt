@@ -370,8 +370,8 @@ class WakeWordForegroundService : Service() {
     /** Marking today as briefed happens earlier, in [offerDailyBrief], before this is even
      * called - the offer itself is what should never repeat, not just a completed brief. */
     private suspend fun runBriefing() {
-        val token = getAccessTokenOrSpeakError(failureContext = "get your briefing") ?: return
         voiceStateStore.set(VoiceState.PROCESSING)
+        val token = getAccessTokenOrSpeakError(failureContext = "get your briefing") ?: return
         try {
             val briefingText = dailyBriefingUseCase.buildBriefing(token, locationProvider.getLastKnownLocation())
             speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore, briefingText)
@@ -385,8 +385,8 @@ class WakeWordForegroundService : Service() {
     }
 
     private suspend fun runCommand(transcript: String, conversationHistory: MutableList<ChatMessage>) {
-        val token = getAccessTokenOrSpeakError(failureContext = "help with that") ?: return
         voiceStateStore.set(VoiceState.PROCESSING)
+        val token = getAccessTokenOrSpeakError(failureContext = "help with that") ?: return
         try {
             val answer = commandExecutor.handle(transcript, token, ttsSpeaker, sttListener, conversationHistory)
             speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore,answer)

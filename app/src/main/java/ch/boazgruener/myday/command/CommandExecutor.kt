@@ -10,6 +10,7 @@ import ch.boazgruener.myday.briefing.DailyBriefingUseCase
 import ch.boazgruener.myday.anthropic.ChatMessage
 import ch.boazgruener.myday.anthropic.ServerToolDefinition
 import ch.boazgruener.myday.anthropic.ToolDefinition
+import ch.boazgruener.myday.anthropic.WebFetchToolDefinition
 import ch.boazgruener.myday.anthropic.WebSearchUserLocation
 import ch.boazgruener.myday.calendar.CalendarEvent
 import ch.boazgruener.myday.calendar.CalendarRepository
@@ -157,6 +158,11 @@ private val WEB_SEARCH_TOOL = ServerToolDefinition(
         country = HomeLocation.COUNTRY, timezone = HomeLocation.TIMEZONE
     )
 )
+
+/** Anthropic-hosted (not implemented by this app) - see [WebFetchToolDefinition]. A search
+ * snippet often can't answer things like "what's the current standing/table" - this reads the
+ * actual page a search result pointed to, verified live against a real standings page. */
+private val WEB_FETCH_TOOL = WebFetchToolDefinition(maxUses = 3)
 
 private val EMAIL_SEARCH_TOOL = ToolDefinition(
     name = "search_emails",
@@ -565,9 +571,13 @@ class CommandExecutor(
             web_search when the question genuinely needs current or real-world information you
             don't already have - a live score or result, today's business hours, what's
             trending right now, "the nearest X" - since each search has a real cost unlike
-            everything else here. Never search for something you already know confidently. When
-            you do search, still answer in the same short spoken style as everything else -
-            summarize the answer, don't read out a list of sources.
+            everything else here. Never search for something you already know confidently. A
+            search result's snippet is often too short for something like an exact current
+            standings table or ranked list - when that happens, use web_fetch on the most
+            promising result's URL to actually read that page rather than giving up or reporting
+            an incomplete answer. When you do search or fetch, still answer in the same short
+            spoken style as everything else - summarize the answer, don't read out a list of
+            sources or a raw table.
             Reply in natural spoken English only, concise, as if reading the answer aloud -
             no markdown, no bullet points, no headers.
             Since every response is spoken aloud anyway, "play", "read out loud", "read to me",
@@ -584,7 +594,7 @@ class CommandExecutor(
                 CALENDAR_TOOL, DAILY_BRIEF_TOOL, EMAIL_SEARCH_TOOL, EMAIL_BODY_TOOL, FIND_CONTACT_TOOL,
                 GET_MY_EMAIL_TOOL, TRAVEL_TIME_TOOL, UPDATE_RSVP_TOOL, CREATE_EVENT_TOOL, UPDATE_EVENT_TOOL,
                 DELETE_EVENT_TOOL, ARCHIVE_EMAIL_TOOL, MOVE_TO_JUNK_TOOL, SEND_EMAIL_TOOL,
-                REPLY_TO_EMAIL_TOOL, WHATSAPP_TOOL, REPLY_TO_WHATSAPP_TOOL, WEB_SEARCH_TOOL
+                REPLY_TO_EMAIL_TOOL, WHATSAPP_TOOL, REPLY_TO_WHATSAPP_TOOL, WEB_SEARCH_TOOL, WEB_FETCH_TOOL
             )
         ) { name, input ->
             Log.d(TAG, "Tool call: $name($input)")

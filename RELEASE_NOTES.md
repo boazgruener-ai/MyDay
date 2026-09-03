@@ -4,6 +4,14 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.3.1 — 2026-09-03
+
+**Two bugs found during live testing of 0.3.0/0.2.0, fixed.**
+- **"Working on your request" showing up 10-15 seconds late.** The status was being set only after the Google access-token refresh completed, not before it - and that refresh is a live network round-trip to Google that can genuinely take that long. Moved the state update to fire immediately, before the token fetch, in both the voice-command and daily-briefing paths.
+- **Web search answering "I can't find that" for things like league standings or streaming charts.** Verified live against the real API that `web_search` itself was working correctly - it was searching and finding real pages - but a search result's snippet is often just navigation text, not the actual table/list data on the page. Added Anthropic's `web_fetch` tool alongside `web_search`: Claude now follows up a promising search result by actually reading that page's full content, which reliably surfaces the real data (verified live: a Swiss Super League standings question now gets the actual current table, sourced by search-then-fetch in the same turn). `web_fetch` is still in beta and needed its own opt-in header on every API call.
+
+---
+
 ## 0.3.0 — 2026-09-03
 
 **Settings backup, after a real data-loss incident.**

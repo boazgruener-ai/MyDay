@@ -12,6 +12,10 @@ interface AnthropicApi {
     suspend fun createMessage(
         @Header("x-api-key") apiKey: String,
         @Header("anthropic-version") version: String = "2023-06-01",
+        // web_fetch is still beta - this header is harmless to send even when a given request's
+        // tools don't include it, so it's easiest to default it on every call rather than plumb
+        // a per-call flag through.
+        @Header("anthropic-beta") beta: String = "web-fetch-2025-09-10",
         @Body request: MessagesRequest
     ): MessagesResponse
 }

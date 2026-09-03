@@ -71,6 +71,19 @@ data class WebSearchUserLocation(
     @SerializedName("timezone") val timezone: String? = null
 )
 
+/**
+ * Anthropic-hosted page fetch (still beta - see [ch.boazgruener.myday.anthropic.AnthropicApi]'s
+ * beta header) - reads a specific URL's actual content, unlike [ServerToolDefinition]'s
+ * search-snippet results. Meant to follow a web_search hit: search finds the right page, fetch
+ * reads it, since a snippet alone often lacks the detail a page's full text has (a live standings
+ * table, a specific article body).
+ */
+data class WebFetchToolDefinition(
+    @SerializedName("type") val type: String = "web_fetch_20250910",
+    @SerializedName("name") val name: String = "web_fetch",
+    @SerializedName("max_uses") val maxUses: Int? = null
+)
+
 data class MessagesResponse(
     @SerializedName("id") val id: String,
     @SerializedName("content") val content: List<ContentBlock> = emptyList(),
