@@ -1,3 +1,7 @@
+/**
+ * Wraps Android TextToSpeech for suspend-based speak/stop, with barge-in-safe cancellation of an
+ * in-flight speak() call.
+ */
 package ch.boazgruener.myday.voice
 
 import android.content.Context

@@ -1,3 +1,4 @@
+/** Gson request/response models for the Google Cloud Speech-to-Text REST API. */
 package ch.boazgruener.myday.voice
 
 import com.google.gson.annotations.SerializedName

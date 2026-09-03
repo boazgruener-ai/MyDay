@@ -1,3 +1,4 @@
+/** Gmail label name constants shared by the background classifier and voice-triggered file actions. */
 package ch.boazgruener.myday.gmail
 
 /** Shared label names used by both the background classifier and voice-triggered file actions. */

@@ -1,3 +1,7 @@
+/**
+ * WorkManager job that sends voice/notification "time to leave" alerts ahead of today's
+ * meetings - traffic-aware driving time for physical meetings, reminder lead time for online ones.
+ */
 package ch.boazgruener.myday.work
 
 import android.app.NotificationChannel

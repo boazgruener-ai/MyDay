@@ -1,3 +1,4 @@
+/** Persists whether today's daily briefing has already been given. */
 package ch.boazgruener.myday.briefing
 
 import android.content.Context

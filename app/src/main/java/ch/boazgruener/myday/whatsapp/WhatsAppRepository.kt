@@ -1,3 +1,5 @@
+/** Records and queries captured WhatsApp messages via [WhatsAppMessageDao] - see the class doc
+ * below for why on-device capture is the only way to see WhatsApp content at all. */
 package ch.boazgruener.myday.whatsapp
 
 import java.security.MessageDigest

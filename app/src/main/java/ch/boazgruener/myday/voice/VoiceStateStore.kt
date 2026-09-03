@@ -1,3 +1,7 @@
+/**
+ * Voice pipeline state enum and the StateFlow holder shared between WakeWordForegroundService
+ * and MainActivity's status display.
+ */
 package ch.boazgruener.myday.voice
 
 import kotlinx.coroutines.flow.MutableStateFlow

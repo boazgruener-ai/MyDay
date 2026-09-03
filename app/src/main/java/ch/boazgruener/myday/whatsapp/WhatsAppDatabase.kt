@@ -1,3 +1,4 @@
+/** Room database for captured WhatsApp messages, plus its v1->v2 schema migration. */
 package ch.boazgruener.myday.whatsapp
 
 import androidx.room.Database

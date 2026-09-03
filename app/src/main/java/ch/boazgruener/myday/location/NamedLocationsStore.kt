@@ -1,3 +1,7 @@
+/**
+ * DataStore-backed persistence for Boaz's user-defined place-name-to-address mappings, with
+ * fuzzy name resolution to recover from STT mishears.
+ */
 package ch.boazgruener.myday.location
 
 import android.content.Context

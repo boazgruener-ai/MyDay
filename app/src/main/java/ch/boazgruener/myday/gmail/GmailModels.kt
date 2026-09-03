@@ -1,3 +1,4 @@
+/** Gmail API data models plus helpers for reading headers and decoding MIME message bodies. */
 package ch.boazgruener.myday.gmail
 
 import com.google.gson.annotations.SerializedName

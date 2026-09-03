@@ -1,3 +1,4 @@
+/** Gson response models for the Google Maps Distance Matrix and Geocoding APIs. */
 package ch.boazgruener.myday.maps
 
 import com.google.gson.annotations.SerializedName

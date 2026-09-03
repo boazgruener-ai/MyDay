@@ -1,3 +1,5 @@
+/** Fuzzy name-matching for correcting speech-to-text errors against device contacts / known
+ * correspondents - see [matchScore] and [findBestContactMatches]. */
 package ch.boazgruener.myday.command
 
 /** [emails] holds every distinct address found for this exact name, not just one - a contact

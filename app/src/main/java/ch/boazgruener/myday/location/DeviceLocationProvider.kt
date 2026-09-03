@@ -1,3 +1,7 @@
+/**
+ * Gets a fresh device location fix via the Fused Location Provider, falling back to the OS's
+ * passive cache, for weather and travel-time features.
+ */
 package ch.boazgruener.myday.location
 
 import android.Manifest

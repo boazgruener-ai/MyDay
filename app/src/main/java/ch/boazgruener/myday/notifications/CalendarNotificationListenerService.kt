@@ -1,3 +1,6 @@
+/** NotificationListenerService that both dismisses ended-meeting Calendar notifications and
+ * captures WhatsApp messages from their own notifications - see the class doc below for why
+ * these two unrelated jobs share one listener. */
 package ch.boazgruener.myday.notifications
 
 import android.app.Notification

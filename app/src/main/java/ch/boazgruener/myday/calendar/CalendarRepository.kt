@@ -1,3 +1,5 @@
+/** Wraps [CalendarApi] behind a hand-built Retrofit client and exposes the higher-level calendar
+ * operations (date-range queries, RSVP updates, create/update/delete) the rest of the app calls. */
 package ch.boazgruener.myday.calendar
 
 import okhttp3.OkHttpClient

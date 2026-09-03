@@ -1,3 +1,4 @@
+/** Retrofit interface for Open-Meteo's current-weather forecast endpoint. */
 package ch.boazgruener.myday.weather
 
 import retrofit2.http.GET

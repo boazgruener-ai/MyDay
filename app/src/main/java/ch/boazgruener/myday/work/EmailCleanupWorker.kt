@@ -1,3 +1,7 @@
+/**
+ * WorkManager job that auto-classifies recent inbox mail into junk/promotion/payment and files
+ * it accordingly, and harvests correspondent names for speech-recognition biasing.
+ */
 package ch.boazgruener.myday.work
 
 import android.content.Context

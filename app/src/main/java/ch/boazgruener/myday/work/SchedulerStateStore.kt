@@ -1,3 +1,4 @@
+/** Tracks which calendar events already got an "upcoming meeting" voice alert today. */
 package ch.boazgruener.myday.work
 
 import android.content.Context

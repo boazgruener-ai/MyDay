@@ -1,3 +1,7 @@
+/**
+ * Wraps the Google Maps Distance Matrix and Geocoding APIs to estimate travel time and
+ * disambiguate free-text place names toward wherever Boaz actually is.
+ */
 package ch.boazgruener.myday.maps
 
 import android.util.Log

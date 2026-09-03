@@ -1,3 +1,4 @@
+/** Persists known correspondents' display names, used as speech-recognizer biasing hints. */
 package ch.boazgruener.myday.gmail
 
 import android.content.Context

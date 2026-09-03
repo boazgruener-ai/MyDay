@@ -1,3 +1,4 @@
+/** Retrofit interface for the Gmail API endpoints Myday uses (messages, labels, send, profile). */
 package ch.boazgruener.myday.gmail
 
 import retrofit2.http.Body

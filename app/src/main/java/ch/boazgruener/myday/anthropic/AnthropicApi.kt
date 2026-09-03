@@ -1,3 +1,4 @@
+/** Retrofit interface for Anthropic's Messages API. */
 package ch.boazgruener.myday.anthropic
 
 import retrofit2.http.Body

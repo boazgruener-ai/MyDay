@@ -1,3 +1,5 @@
+/** Retrofit interface for the Google Calendar v3 REST API - list/get/insert/patch/delete events
+ * on the primary calendar, plus reading its default reminder settings. */
 package ch.boazgruener.myday.calendar
 
 import retrofit2.Response

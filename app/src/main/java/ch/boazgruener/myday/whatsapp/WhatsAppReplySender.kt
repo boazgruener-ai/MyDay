@@ -1,3 +1,5 @@
+/** Sends WhatsApp replies by triggering the target notification's own quick-reply action - see
+ * the class doc below for why there's no other way for a personal account. */
 package ch.boazgruener.myday.whatsapp
 
 import android.app.PendingIntent

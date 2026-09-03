@@ -1,3 +1,4 @@
+/** Wraps the Gmail API for reading messages, managing labels, and sending/replying to mail. */
 package ch.boazgruener.myday.gmail
 
 import android.util.Base64

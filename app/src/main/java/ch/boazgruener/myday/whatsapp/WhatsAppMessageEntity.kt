@@ -1,3 +1,5 @@
+/** Room entity for one captured WhatsApp message - see the class doc below for its fields and
+ * their caveats. */
 package ch.boazgruener.myday.whatsapp
 
 import androidx.room.Entity

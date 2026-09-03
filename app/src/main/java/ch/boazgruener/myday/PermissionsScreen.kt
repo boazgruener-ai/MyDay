@@ -1,3 +1,5 @@
+/** Compose dialog listing every permission/authorization Myday needs in one screen, each with
+ * its own grant status and action - see the composable doc below. */
 package ch.boazgruener.myday
 
 import androidx.compose.foundation.layout.Arrangement

@@ -1,3 +1,4 @@
+/** Response models for Open-Meteo's forecast endpoint, plus a WMO weather-code-to-text mapping. */
 package ch.boazgruener.myday.weather
 
 import com.google.gson.annotations.SerializedName

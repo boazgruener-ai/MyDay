@@ -1,3 +1,4 @@
+/** Persists a log of email promotion/junk/keep classification decisions for later review. */
 package ch.boazgruener.myday.gmail
 
 import android.content.Context

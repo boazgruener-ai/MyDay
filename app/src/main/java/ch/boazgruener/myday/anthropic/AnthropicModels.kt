@@ -1,3 +1,5 @@
+/** Request/response data models for Anthropic's Messages API, including the tool-use and
+ * server-hosted-tool (web search) content-block shapes. */
 package ch.boazgruener.myday.anthropic
 
 import com.google.gson.annotations.SerializedName

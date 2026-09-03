@@ -1,3 +1,8 @@
+/**
+ * Captures raw mic audio directly via AudioRecord with custom energy-based silence detection,
+ * then transcribes it via Google Cloud Speech-to-Text - built to replace Android's own
+ * SpeechRecognizer, whose end-of-speech detection proved unfixably unreliable for this app.
+ */
 package ch.boazgruener.myday.voice
 
 import android.content.Context

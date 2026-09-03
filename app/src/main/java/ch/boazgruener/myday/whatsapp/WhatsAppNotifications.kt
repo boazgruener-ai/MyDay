@@ -1,3 +1,5 @@
+/** Shared notification-inspection helpers for WhatsApp conversation labels and reply actions -
+ * see the object doc below for why capture and reply must agree on this logic. */
 package ch.boazgruener.myday.whatsapp
 
 import android.app.Notification

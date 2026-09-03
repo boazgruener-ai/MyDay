@@ -1,3 +1,8 @@
+/**
+ * Foreground service running the always-on "Myday" wake-word engine and the conversation loop it
+ * triggers: greeting/daily-brief offer, turn-by-turn STT capture and CommandExecutor dispatch,
+ * and session idle-timeout/sign-off handling.
+ */
 package ch.boazgruener.myday.voice
 
 import android.app.Notification

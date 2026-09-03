@@ -1,3 +1,7 @@
+/**
+ * Speaks text in chunks with a brief "Stop" listen-check between each, so a long spoken response
+ * can be interrupted mid-playback.
+ */
 package ch.boazgruener.myday.voice
 
 import android.util.Log

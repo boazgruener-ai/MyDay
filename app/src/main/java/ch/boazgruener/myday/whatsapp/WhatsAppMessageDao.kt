@@ -1,3 +1,5 @@
+/** Room DAO for captured WhatsApp messages - a dedupe-safe insert plus the filtered/ordered
+ * query used to answer "what's on WhatsApp" requests. */
 package ch.boazgruener.myday.whatsapp
 
 import androidx.room.Dao

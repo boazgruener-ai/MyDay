@@ -1,3 +1,5 @@
+/** Application class that builds [AppContainer] and schedules periodic background WorkManager
+ * jobs; AppContainer is the app's manual DI container holding every repository/client singleton. */
 package ch.boazgruener.myday
 
 import android.app.Application

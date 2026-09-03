@@ -1,3 +1,5 @@
+/** Persists a capped, newest-first log of notable actions Myday's AI has taken - one entry per
+ * voice turn and per background job run that actually did something, shown on the home screen. */
 package ch.boazgruener.myday.activitylog
 
 import android.content.Context

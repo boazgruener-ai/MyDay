@@ -1,3 +1,5 @@
+/** Builds the spoken daily briefing by combining weather, today's calendar, and recent email,
+ * then having Claude synthesize it into a natural script. */
 package ch.boazgruener.myday.briefing
 
 import ch.boazgruener.myday.anthropic.AnthropicClient

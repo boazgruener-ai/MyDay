@@ -1,3 +1,6 @@
+/** Tool definitions and dispatch for Claude's open-ended voice command handling - calendar,
+ * Gmail, WhatsApp, travel-time, and contact-lookup tools plus the write-tool confirmation flow -
+ * see [CommandExecutor] below. */
 package ch.boazgruener.myday.command
 
 import android.util.Log

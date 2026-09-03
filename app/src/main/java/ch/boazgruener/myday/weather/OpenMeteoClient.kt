@@ -1,3 +1,5 @@
+/** Retrofit-backed client for fetching current weather, plus the build-time [HomeLocation]
+ * constants used as a fallback when no device location is available. */
 package ch.boazgruener.myday.weather
 
 import ch.boazgruener.myday.BuildConfig

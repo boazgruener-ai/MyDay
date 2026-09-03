@@ -1,3 +1,4 @@
+/** Persists the sender junk-blacklist and checks a message's From header against it. */
 package ch.boazgruener.myday.gmail
 
 import android.content.Context

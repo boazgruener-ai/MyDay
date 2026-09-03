@@ -1,3 +1,5 @@
+/** Wraps the Anthropic Messages API for one-off prompts (test/briefing) and the agentic
+ * tool-use loop that drives Myday's voice actions. */
 package ch.boazgruener.myday.anthropic
 
 import okhttp3.OkHttpClient

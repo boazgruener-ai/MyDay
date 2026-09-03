@@ -1,3 +1,5 @@
+/** Gson-mapped request/response models for the Google Calendar API, plus small helpers like
+ * [isPast] for reasoning about them. */
 package ch.boazgruener.myday.calendar
 
 import com.google.gson.annotations.SerializedName

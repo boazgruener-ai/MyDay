@@ -1,3 +1,5 @@
+/** Backs up/restores Settings-menu data to the signed-in Google account's app-private Drive
+ * folder - see the class doc below for why this was chosen over Android's Auto Backup. */
 package ch.boazgruener.myday.backup
 
 import com.google.gson.Gson

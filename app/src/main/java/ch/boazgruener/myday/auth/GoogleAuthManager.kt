@@ -1,3 +1,6 @@
+/** Google OAuth scopes and the two authorization clients that request them - [GoogleAuthManager]
+ * for the interactive (Activity-driven) consent flow, [BackgroundGoogleAuth] for silent
+ * background use once scopes are already granted. */
 package ch.boazgruener.myday.auth
 
 import android.app.Activity

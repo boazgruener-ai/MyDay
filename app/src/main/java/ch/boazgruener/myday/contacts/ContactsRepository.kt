@@ -1,3 +1,5 @@
+/** Reads the phone's Contacts provider for name/email pairs - see [ContactsRepository] below for
+ * why it's preferred over Gmail-scraped names and how it handles a missing permission. */
 package ch.boazgruener.myday.contacts
 
 import android.Manifest

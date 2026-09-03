@@ -1,3 +1,4 @@
+/** Retrofit interface for the Google Cloud Speech-to-Text REST endpoint. */
 package ch.boazgruener.myday.voice
 
 import retrofit2.http.Body

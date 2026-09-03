@@ -1,3 +1,4 @@
+/** Encrypts and decrypts the user's own Anthropic API key at rest via Tink/Android Keystore. */
 package ch.boazgruener.myday.anthropic
 
 import android.content.Context

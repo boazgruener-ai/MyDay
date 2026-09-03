@@ -1,3 +1,4 @@
+/** WorkManager output-data key constants, namespaced by which worker writes them. */
 package ch.boazgruener.myday.work
 
 /**

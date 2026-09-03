@@ -1,3 +1,7 @@
+/**
+ * Wraps Android's on-device SpeechRecognizer for one-shot utterance capture and short
+ * "listen for a word" checks; must run on the main thread.
+ */
 package ch.boazgruener.myday.voice
 
 import android.content.Context

@@ -1,3 +1,8 @@
+/**
+ * WorkManager job that archives Google Calendar notification emails once the meeting they
+ * describe has ended, parsed straight from each email's subject rather than cross-referenced
+ * against live Calendar state.
+ */
 package ch.boazgruener.myday.work
 
 import android.content.Context

@@ -1,3 +1,4 @@
+/** Retrofit interface for the Google Maps Distance Matrix and Geocoding REST endpoints. */
 package ch.boazgruener.myday.maps
 
 import retrofit2.http.GET

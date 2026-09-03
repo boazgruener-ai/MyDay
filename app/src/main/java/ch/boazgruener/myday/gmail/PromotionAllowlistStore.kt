@@ -1,3 +1,4 @@
+/** Persists sender names/companies exempted from promotion/junk classification. */
 package ch.boazgruener.myday.gmail
 
 import android.content.Context

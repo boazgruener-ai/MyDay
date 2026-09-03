@@ -1,3 +1,9 @@
+/**
+ * App entry point and the entire Compose UI: hamburger-drawer navigation, bottom nav bar, the
+ * home screen (status/weather/summary counts/activity feed), the Permissions screen, and every
+ * Settings/Manual-Runs dialog. No ViewModel layer - state lives directly in MainScreen's
+ * composable scope, reading from AppContainer's repositories/stores.
+ */
 package ch.boazgruener.myday
 
 import android.Manifest
