@@ -162,7 +162,10 @@ private fun formatEmailCleanupResult(info: WorkInfo?): String = when {
         val promotions = info.outputData.getInt(WorkResultKeys.PROMOTIONS, 0)
         val junk = info.outputData.getInt(WorkResultKeys.JUNK, 0)
         val payments = info.outputData.getInt(WorkResultKeys.PAYMENTS, 0)
-        "Checked $processed email(s): $promotions filed as promotion, $junk as junk, $payments as payment."
+        val jobs = info.outputData.getInt(WorkResultKeys.JOBS, 0)
+        val googleNotifications = info.outputData.getInt(WorkResultKeys.GOOGLE_NOTIFICATIONS, 0)
+        "Checked $processed email(s): $promotions filed as promotion, $junk as junk, $payments as payment, " +
+            "$jobs as job, $googleNotifications as Google notification."
     }
 }
 

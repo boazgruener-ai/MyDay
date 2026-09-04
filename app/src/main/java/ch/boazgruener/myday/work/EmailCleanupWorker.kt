@@ -37,12 +37,14 @@ private const val TAG = "MydayEmailCleanup"
  * tagged "Myday/Reviewed" so later runs never re-classify the same mail.
  *
  * Categorization order, most deterministic first: junk blocklist -> payment-keyword subject match
- * -> promotion allowlist -> LLM (promotion or keep only - "junk" used to be an independent LLM
- * guess, which read as redundant with "promotion" and confusing; it's now purely the blocklist, a
- * deliberate user decision rather than a model guess). Payment-keyword match sits ahead of the
- * promotion allowlist and the LLM call since it's an equally deliberate, deterministic user
- * instruction, just keyed on subject text instead of sender - filing something as a payment
- * record doesn't conflict with the allowlist's actual promise ("never treated as promotion/junk").
+ * -> job-search sender/subject match -> Google notification sender match -> promotion allowlist
+ * -> LLM (promotion or keep only - "junk" used to be an independent LLM guess, which read as
+ * redundant with "promotion" and confusing; it's now purely the blocklist, a deliberate user
+ * decision rather than a model guess). Payment, job, and Google-notification matches all sit
+ * ahead of the promotion allowlist and the LLM call since they're equally deliberate,
+ * deterministic user instructions, just keyed on sender/subject text instead - filing something
+ * into one of those doesn't conflict with the allowlist's actual promise ("never treated as
+ * promotion/junk").
  */
 class EmailCleanupWorker(
     context: Context,
@@ -77,7 +79,8 @@ class EmailCleanupWorker(
             if (counts.processed > 0) {
                 container.activityLogStore.appendEntry(
                     "Checked ${counts.processed} email(s): ${counts.promotions} filed as promotion, " +
-                        "${counts.junk} as junk, ${counts.payments} as payment."
+                        "${counts.junk} as junk, ${counts.payments} as payment, ${counts.jobs} as job, " +
+                        "${counts.googleNotifications} as Google notification."
                 )
             }
             Result.success(
@@ -85,7 +88,9 @@ class EmailCleanupWorker(
                     WorkResultKeys.PROCESSED to counts.processed,
                     WorkResultKeys.PROMOTIONS to counts.promotions,
                     WorkResultKeys.JUNK to counts.junk,
-                    WorkResultKeys.PAYMENTS to counts.payments
+                    WorkResultKeys.PAYMENTS to counts.payments,
+                    WorkResultKeys.JOBS to counts.jobs,
+                    WorkResultKeys.GOOGLE_NOTIFICATIONS to counts.googleNotifications
                 )
             )
         } catch (e: Exception) {
@@ -94,7 +99,10 @@ class EmailCleanupWorker(
         }
     }
 
-    private data class CleanupCounts(val processed: Int, val promotions: Int, val junk: Int, val payments: Int)
+    private data class CleanupCounts(
+        val processed: Int, val promotions: Int, val junk: Int, val payments: Int, val jobs: Int,
+        val googleNotifications: Int
+    )
 
     /**
      * Feeds recent correspondents' names into [ContactHintsStore] so the speech recognizer can
@@ -124,7 +132,7 @@ class EmailCleanupWorker(
             query = "in:inbox -label:\"${GmailLabels.REVIEWED}\" newer_than:3d",
             maxResults = 25
         )
-        if (messages.isEmpty()) return CleanupCounts(0, 0, 0, 0)
+        if (messages.isEmpty()) return CleanupCounts(0, 0, 0, 0, 0, 0)
 
         val allowlistedSenders = promotionAllowlistStore.getAllowlistedSenders()
         val blacklistedSenders = junkBlacklistStore.getBlacklistedSenders()
@@ -132,10 +140,14 @@ class EmailCleanupWorker(
         val promotionsLabelId = gmail.getOrCreateLabel(token, GmailLabels.PROMOTIONS)
         val junkLabelId = gmail.getOrCreateLabel(token, GmailLabels.JUNK)
         val paymentsLabelId = gmail.getOrCreateLabel(token, GmailLabels.PAYMENTS)
+        val jobsLabelId = gmail.getOrCreateLabel(token, GmailLabels.JOBS)
+        val googleNotificationsLabelId = gmail.getOrCreateLabel(token, GmailLabels.GOOGLE_NOTIFICATIONS)
 
         var promotions = 0
         var junk = 0
         var payments = 0
+        var jobs = 0
+        var googleNotifications = 0
         val logEntries = mutableListOf<ClassificationLogEntry>()
         val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
 
@@ -146,6 +158,8 @@ class EmailCleanupWorker(
             val category = when {
                 isBlacklistedSender(from, blacklistedSenders) -> Category.JUNK
                 isPaymentRelatedSubject(subject) -> Category.PAYMENT
+                isJobRelatedMail(from, subject) -> Category.JOB
+                isGoogleNotificationSender(from) -> Category.GOOGLE_NOTIFICATION
                 isAllowlistedSender(from, allowlistedSenders) -> Category.KEEP
                 else -> classify(anthropic, message)
             }
@@ -171,16 +185,28 @@ class EmailCleanupWorker(
                     payments++
                     "Payment"
                 }
+                Category.JOB -> {
+                    addLabels.add(jobsLabelId)
+                    removeLabels.add("INBOX")
+                    jobs++
+                    "Job"
+                }
+                Category.GOOGLE_NOTIFICATION -> {
+                    addLabels.add(googleNotificationsLabelId)
+                    removeLabels.add("INBOX")
+                    googleNotifications++
+                    "Google notification"
+                }
                 Category.KEEP -> "Kept" // just marked reviewed, left in the inbox
             }
             gmail.modifyLabels(token, message.id, addLabelIds = addLabels, removeLabelIds = removeLabels)
             logEntries.add(ClassificationLogEntry(from, subject, categoryLabel, now))
         }
         classificationLogStore.appendEntries(logEntries)
-        return CleanupCounts(messages.size, promotions, junk, payments)
+        return CleanupCounts(messages.size, promotions, junk, payments, jobs, googleNotifications)
     }
 
-    private enum class Category { PROMOTION, JUNK, PAYMENT, KEEP }
+    private enum class Category { PROMOTION, JUNK, PAYMENT, JOB, GOOGLE_NOTIFICATION, KEEP }
 
     /** Deliberately just these three words on the subject line, not an LLM guess - Boaz asked for
      * exactly this, and financial mail (invoices/receipts/payment confirmations) is exactly the
@@ -189,6 +215,30 @@ class EmailCleanupWorker(
 
     private fun isPaymentRelatedSubject(subject: String): Boolean =
         PAYMENT_KEYWORDS.any { subject.contains(it, ignoreCase = true) }
+
+    /** Deliberately deterministic, not an LLM guess - Boaz gave exact identifying patterns for
+     * job-search mail: LinkedIn's own job-alert sender address, Jobs.ch, and the common
+     * "<company>-jobnotification"-style automated sender many ATS platforms use (e.g.
+     * swissre-jobnotification@...). Checked against the sender first since that's the reliable
+     * signal; "job alert" in the subject is a secondary catch-all for senders that don't match
+     * one of those exact patterns. */
+    private val JOB_SENDER_PATTERNS = listOf("jobalert", "jobs.ch", "jobnotification", "job-notification")
+
+    private fun isJobRelatedMail(from: String, subject: String): Boolean =
+        JOB_SENDER_PATTERNS.any { from.contains(it, ignoreCase = true) } ||
+            subject.contains("job alert", ignoreCase = true)
+
+    /** Deliberately deterministic - any automated notification from a google.com domain (Family
+     * Link, security alerts from accounts.google.com, and similar), except Calendar's own
+     * notification emails, which MeetingEmailCleanupWorker already handles separately (archived
+     * once the meeting they describe has ended, not filed here). Must stay excluded here or the
+     * two workers would fight over the same emails. */
+    private val CALENDAR_NOTIFICATION_SENDER = "calendar-notification@google.com"
+    private val GOOGLE_NOTIFICATION_DOMAINS = listOf("@google.com", "@accounts.google.com")
+
+    private fun isGoogleNotificationSender(from: String): Boolean =
+        GOOGLE_NOTIFICATION_DOMAINS.any { from.contains(it, ignoreCase = true) } &&
+            !from.contains(CALENDAR_NOTIFICATION_SENDER, ignoreCase = true)
 
     private suspend fun classify(anthropic: AnthropicClient, message: MessageMetadata): Category {
         val from = message.headerValue("From") ?: ""

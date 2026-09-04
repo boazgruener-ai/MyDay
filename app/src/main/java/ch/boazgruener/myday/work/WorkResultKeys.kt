@@ -15,6 +15,8 @@ object WorkResultKeys {
     const val PROMOTIONS = "promotions"
     const val JUNK = "junk"
     const val PAYMENTS = "payments"
+    const val JOBS = "jobs"
+    const val GOOGLE_NOTIFICATIONS = "google_notifications"
 
     // MeetingEmailCleanupWorker
     const val ARCHIVED = "archived"

@@ -7,4 +7,6 @@ object GmailLabels {
     const val PROMOTIONS = "Myday/Promotions"
     const val JUNK = "Myday/Junk"
     const val PAYMENTS = "Myday/Payments"
+    const val JOBS = "Myday/Jobs"
+    const val GOOGLE_NOTIFICATIONS = "Myday/Google-Notifications"
 }

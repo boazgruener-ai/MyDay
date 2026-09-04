@@ -4,6 +4,25 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.4.2 — 2026-09-04
+
+**New auto-filing category: Google's own notification emails, filed to Myday/Google-Notifications.**
+- Another deterministic sender match, same reasoning as Payments/Jobs: catches anything from a google.com notification domain (Family Link's `families-noreply@google.com`, security alerts from `accounts.google.com`, and similar automated Google mail) - not a model guess.
+- Deliberately excludes Google Calendar's own notification sender (`calendar-notification@google.com`) - that one's already handled by the separate meeting-notification cleanup, which archives it once the meeting it describes has actually ended. Filing it here too would have the two workers fighting over the same emails.
+- Checked alongside the other deterministic categories, ahead of the promotion allowlist and the LLM step; manual "Run Email Cleanup Now" and the periodic background run both report a Google-notification count now.
+
+---
+
+## 0.4.1 — 2026-09-04
+
+**New auto-filing category: job search emails, filed to Myday/Jobs.**
+- Same deterministic-match pattern as Payments (a plain text check, not an LLM guess) - job-search mail has clear, identifiable senders, so it doesn't need a model's judgment call any more than an invoice does.
+- Catches: LinkedIn job alerts (its own `jobalerts-noreply@linkedin.com`-style sender), Jobs.ch, and any `<company>-jobnotification` style automated sender the way many companies' applicant-tracking systems send them (e.g. `swissre-jobnotification@...`) - plus "job alert" in the subject line as a catch-all for senders that don't match one of those exact patterns.
+- Checked right after the payment-keyword match, ahead of the promotion allowlist and the LLM classification step - same reasoning as Payments: a deliberate, deterministic user instruction shouldn't be second-guessed by a model.
+- The manual "Run Email Cleanup Now" result and the periodic background run both now report a jobs count alongside promotions/junk/payments.
+
+---
+
 ## 0.4.0 — 2026-09-04
 
 **Event colors — set or change a meeting's color by voice.**
