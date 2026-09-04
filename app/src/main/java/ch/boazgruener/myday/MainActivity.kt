@@ -89,6 +89,7 @@ import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import ch.boazgruener.myday.activitylog.ActivityLogEntry
 import ch.boazgruener.myday.anthropic.AnthropicClient
 import ch.boazgruener.myday.auth.BackgroundGoogleAuth
@@ -755,6 +756,28 @@ fun MainScreen(
                                     val info = runWorkAndAwaitResult(
                                         context, "email_cleanup_manual",
                                         OneTimeWorkRequestBuilder<EmailCleanupWorker>().setConstraints(networkConstraints()).build()
+                                    )
+                                    formatEmailCleanupResult(info)
+                                }
+                            },
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                        )
+                        NavigationDrawerItem(
+                            label = { Text("Run Email Cleanup (Last 30 Days)") },
+                            selected = false,
+                            onClick = {
+                                runManualAction("Email Cleanup (30 Days)", workName = "email_cleanup_deep_manual") {
+                                    val info = runWorkAndAwaitResult(
+                                        context, "email_cleanup_deep_manual",
+                                        OneTimeWorkRequestBuilder<EmailCleanupWorker>()
+                                            .setConstraints(networkConstraints())
+                                            .setInputData(
+                                                workDataOf(
+                                                    EmailCleanupWorker.INPUT_DAYS_BACK to 30,
+                                                    EmailCleanupWorker.INPUT_INCLUDE_REVIEWED to true
+                                                )
+                                            )
+                                            .build()
                                     )
                                     formatEmailCleanupResult(info)
                                 }

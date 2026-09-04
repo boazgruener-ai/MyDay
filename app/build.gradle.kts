@@ -19,8 +19,8 @@ android {
         applicationId = "ch.boazgruener.myday"
         minSdk = 30
         targetSdk = 37
-        versionCode = 12
-        versionName = "0.4.3"
+        versionCode = 13
+        versionName = "0.4.4"
 
         buildConfigField(
             "String",

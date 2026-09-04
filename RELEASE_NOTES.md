@@ -4,6 +4,14 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.4.4 — 2026-09-04
+
+**The Reviewed-backlog bug also hit Payments - generalized the fix, plus a manual 30-day deep-cleanup run.**
+- Found live: a Sep 2 receipt email from Anthropic, PBC, dated Aug 31 - before the Payments category existed - stayed stuck in the inbox forever, unreached by either the main loop or the 0.4.3 backlog sweep (which only covered Jobs/Google-Notifications). Same root cause as 0.4.3, just for a third category. Generalized `sweepBacklogForNewCategories` into `sweepBacklogForDeterministicCategories`, now covering Payments too.
+- New manual run: **Run Email Cleanup (Last 30 Days)** - reprocesses the last 30 days of inbox mail through the full classification pipeline (including already-Reviewed mail and the LLM promotion/keep call), not just what's new. Explicitly capped at 200 messages regardless of the date window, so a wider request can't turn into an unbounded, hours-long scan of years of old mail - the normal periodic/quick-check run is untouched and still just looks at the last 3 days.
+
+---
+
 ## 0.4.3 — 2026-09-04
 
 **Jobs/Google-Notifications missing real mail, fixed - two separate bugs.**
