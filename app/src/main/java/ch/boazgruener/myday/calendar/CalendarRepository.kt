@@ -79,7 +79,8 @@ class CalendarRepository {
         endLocal: LocalDateTime,
         location: String?,
         description: String?,
-        attendeeEmails: List<String> = emptyList()
+        attendeeEmails: List<String> = emptyList(),
+        colorId: String? = null
     ): CalendarEvent {
         val zoneId = ZoneId.systemDefault().id
         return api.insertEvent(
@@ -90,7 +91,8 @@ class CalendarRepository {
                 end = EventDateTime(dateTime = endLocal.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), date = null, timeZone = zoneId),
                 location = location,
                 description = description,
-                attendees = attendeeEmails.takeIf { it.isNotEmpty() }?.map { Attendee(email = it) }
+                attendees = attendeeEmails.takeIf { it.isNotEmpty() }?.map { Attendee(email = it) },
+                colorId = colorId
             )
         )
     }
@@ -108,7 +110,8 @@ class CalendarRepository {
         startLocal: LocalDateTime?,
         endLocal: LocalDateTime?,
         location: String?,
-        description: String?
+        description: String?,
+        colorId: String? = null
     ): CalendarEvent {
         val zoneId = ZoneId.systemDefault().id
         return api.patchEvent(
@@ -119,7 +122,8 @@ class CalendarRepository {
                 start = startLocal?.let { EventDateTime(dateTime = it.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), date = null, timeZone = zoneId) },
                 end = endLocal?.let { EventDateTime(dateTime = it.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), date = null, timeZone = zoneId) },
                 location = location,
-                description = description
+                description = description,
+                colorId = colorId
             )
         )
     }

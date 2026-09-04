@@ -12,6 +12,7 @@ import ch.boazgruener.myday.anthropic.ServerToolDefinition
 import ch.boazgruener.myday.anthropic.ToolDefinition
 import ch.boazgruener.myday.anthropic.WebFetchToolDefinition
 import ch.boazgruener.myday.anthropic.WebSearchUserLocation
+import ch.boazgruener.myday.calendar.CalendarColors
 import ch.boazgruener.myday.calendar.CalendarEvent
 import ch.boazgruener.myday.calendar.CalendarRepository
 import ch.boazgruener.myday.contacts.ContactsRepository
@@ -332,6 +333,15 @@ private val CREATE_EVENT_TOOL = ToolDefinition(
                 "items" to mapOf("type" to "string"),
                 "description" to "Email addresses of people to invite, each resolved via " +
                     "find_contact first - omit entirely for a personal event with no attendees."
+            ),
+            "color" to mapOf(
+                "type" to "string",
+                "enum" to CalendarColors.NAMES.toList(),
+                "description" to "Optional event color, from Google Calendar's fixed palette " +
+                    "(only these 11 names exist - no arbitrary colors). If Boaz names a casual " +
+                    "color (\"make it red\", \"turn it green\"), map it to the closest one of " +
+                    "these: Lavender, Sage, Grape, Flamingo, Banana, Tangerine, Peacock, " +
+                    "Graphite, Blueberry, Basil, Tomato. Omit entirely if no color was requested."
             )
         ),
         "required" to listOf("summary", "start_datetime", "end_datetime")
@@ -363,7 +373,15 @@ private val UPDATE_EVENT_TOOL = ToolDefinition(
                     "start_datetime if either is changing"
             ),
             "location" to mapOf("type" to "string", "description" to "New location, if changing"),
-            "description" to mapOf("type" to "string", "description" to "New notes/description, if changing")
+            "description" to mapOf("type" to "string", "description" to "New notes/description, if changing"),
+            "color" to mapOf(
+                "type" to "string",
+                "enum" to CalendarColors.NAMES.toList(),
+                "description" to "New event color, if changing - from Google Calendar's fixed " +
+                    "palette (only these 11 names exist - no arbitrary colors). Map a casual " +
+                    "color word (\"make it red\") to the closest one of: Lavender, Sage, Grape, " +
+                    "Flamingo, Banana, Tangerine, Peacock, Graphite, Blueberry, Basil, Tomato."
+            )
         ),
         "required" to listOf("event_id")
     )
@@ -544,7 +562,7 @@ class CommandExecutor(
             tentatively-respond to a meeting invitation, create_calendar_event for a brand new
             event on his own calendar (optionally inviting attendees - resolve names via
             find_contact first, and invites only work for people in Boaz's own phone contacts),
-            update_calendar_event to rename/reschedule/relocate an existing event,
+            update_calendar_event to rename/reschedule/relocate/recolor an existing event,
             delete_calendar_event to remove one entirely, archive_email/move_email_to_junk to
             file an email out of the inbox, send_email to compose and send a brand-new email to a
             contact (resolve via find_contact first), reply_to_email to reply within an
@@ -562,8 +580,8 @@ class CommandExecutor(
             call the tool with a guessed placeholder or made-up value, and don't do anything else
             first (no other tool calls, no filler) - this needs to be the fastest possible reply
             you can give, not preceded by "one moment" or similar, since there's nothing to wait
-            for yet. Don't ask about things this app doesn't support (recurrence, color on
-            events) unless Boaz brings them up himself.
+            for yet. Don't ask about things this app doesn't support (recurring events) unless
+            Boaz brings them up himself.
             For anything that isn't about Boaz's calendar, email, WhatsApp, weather, or travel
             time: if you already know the answer confidently from your own knowledge and it
             doesn't depend on anything that changes day to day (a translation, a definition,
@@ -660,7 +678,8 @@ class CommandExecutor(
                     val description = input["description"] as? String
                     @Suppress("UNCHECKED_CAST")
                     val attendeeEmails = (input["attendee_emails"] as? List<String>) ?: emptyList()
-                    createCalendarEvent(accessToken, summary, startDatetime, endDatetime, location, description, attendeeEmails, ttsSpeaker, sttListener)
+                    val color = input["color"] as? String
+                    createCalendarEvent(accessToken, summary, startDatetime, endDatetime, location, description, attendeeEmails, color, ttsSpeaker, sttListener)
                 }
                 "update_calendar_event" -> {
                     val eventId = input["event_id"] as? String ?: ""
@@ -669,7 +688,8 @@ class CommandExecutor(
                     val endDatetime = input["end_datetime"] as? String
                     val location = input["location"] as? String
                     val description = input["description"] as? String
-                    updateCalendarEvent(accessToken, eventId, summary, startDatetime, endDatetime, location, description, ttsSpeaker, sttListener)
+                    val color = input["color"] as? String
+                    updateCalendarEvent(accessToken, eventId, summary, startDatetime, endDatetime, location, description, color, ttsSpeaker, sttListener)
                 }
                 "delete_calendar_event" -> {
                     val eventId = input["event_id"] as? String ?: ""
@@ -740,10 +760,15 @@ class CommandExecutor(
         location: String?,
         description: String?,
         attendeeEmails: List<String>,
+        color: String?,
         ttsSpeaker: TtsSpeaker,
         sttListener: SttListener
     ): String {
         if (summary.isBlank()) return "No event title given."
+        val colorId = color?.let {
+            CalendarColors.idFor(it) ?: return "\"$it\" isn't one of Google Calendar's event colors " +
+                "(${CalendarColors.NAMES.joinToString(", ")})."
+        }
         val start = try {
             LocalDateTime.parse(startDatetime)
         } catch (e: Exception) {
@@ -774,14 +799,15 @@ class CommandExecutor(
         val timeDescription = start.format(DateTimeFormatter.ofPattern("EEEE, MMMM d 'at' h:mm a"))
         val locationPart = if (!location.isNullOrBlank()) " at $location" else ""
         val attendeePart = if (attendeeEmails.isNotEmpty()) ", inviting ${attendeeEmails.joinToString(", ")}" else ""
+        val colorPart = if (color != null) ", colored $color" else ""
         val confirmed = confirmAction(
             ttsSpeaker, sttListener,
-            prompt = "Do you want me to create \"$summary\" on $timeDescription$locationPart$attendeePart? Say yes to confirm."
+            prompt = "Do you want me to create \"$summary\" on $timeDescription$locationPart$attendeePart$colorPart? Say yes to confirm."
         )
         if (!confirmed) return "Boaz did not confirm - the event was NOT created."
 
         return try {
-            calendarRepository.createEvent(accessToken, summary, start, end, location, description, attendeeEmails)
+            calendarRepository.createEvent(accessToken, summary, start, end, location, description, attendeeEmails, colorId)
             "Confirmed - created \"$summary\" on $timeDescription."
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create calendar event", e)
@@ -797,14 +823,19 @@ class CommandExecutor(
         endDatetime: String?,
         location: String?,
         description: String?,
+        color: String?,
         ttsSpeaker: TtsSpeaker,
         sttListener: SttListener
     ): String {
         if (eventId.isBlank()) return "No event ID given."
         if (summary.isNullOrBlank() && startDatetime.isNullOrBlank() && endDatetime.isNullOrBlank() &&
-            location.isNullOrBlank() && description.isNullOrBlank()
+            location.isNullOrBlank() && description.isNullOrBlank() && color.isNullOrBlank()
         ) {
             return "Nothing to change was given."
+        }
+        val colorId = color?.let {
+            CalendarColors.idFor(it) ?: return "\"$it\" isn't one of Google Calendar's event colors " +
+                "(${CalendarColors.NAMES.joinToString(", ")})."
         }
         if (startDatetime.isNullOrBlank() != endDatetime.isNullOrBlank()) {
             return "To change the time, both a new start time and end time are needed together."
@@ -836,6 +867,7 @@ class CommandExecutor(
         if (start != null) changes.add("move it to ${start.format(DateTimeFormatter.ofPattern("EEEE, MMMM d 'at' h:mm a"))}")
         if (!location.isNullOrBlank()) changes.add("set its location to $location")
         if (!description.isNullOrBlank()) changes.add("update its description")
+        if (!color.isNullOrBlank()) changes.add("change its color to $color")
 
         val existingTitle = existing.summary ?: "that event"
         val confirmed = confirmAction(
@@ -845,7 +877,7 @@ class CommandExecutor(
         if (!confirmed) return "Boaz did not confirm - the event was NOT changed."
 
         return try {
-            calendarRepository.updateEvent(accessToken, eventId, summary, start, end, location, description)
+            calendarRepository.updateEvent(accessToken, eventId, summary, start, end, location, description, colorId)
             "Confirmed - the event was updated."
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update calendar event", e)

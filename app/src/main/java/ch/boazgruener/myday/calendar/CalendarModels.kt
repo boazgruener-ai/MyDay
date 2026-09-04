@@ -19,8 +19,22 @@ data class CalendarEvent(
     @SerializedName("attendees") val attendees: List<Attendee>? = null,
     @SerializedName("hangoutLink") val hangoutLink: String? = null,
     @SerializedName("conferenceData") val conferenceData: ConferenceData? = null,
-    @SerializedName("reminders") val reminders: EventReminders? = null
+    @SerializedName("reminders") val reminders: EventReminders? = null,
+    @SerializedName("colorId") val colorId: String? = null
 )
+
+/** Google Calendar events only support this fixed 11-color palette - no arbitrary/free-form
+ * colors are possible, so a casual request ("make it red") has to be mapped to the closest one
+ * of these names rather than passed through directly. */
+object CalendarColors {
+    private val NAME_TO_ID = mapOf(
+        "Lavender" to "1", "Sage" to "2", "Grape" to "3", "Flamingo" to "4", "Banana" to "5",
+        "Tangerine" to "6", "Peacock" to "7", "Graphite" to "8", "Blueberry" to "9",
+        "Basil" to "10", "Tomato" to "11"
+    )
+    val NAMES: Set<String> = NAME_TO_ID.keys
+    fun idFor(name: String): String? = NAME_TO_ID[name]
+}
 
 /** All-day events (date only, no dateTime) are never treated as "already passed" by time. */
 fun CalendarEvent.isPast(now: OffsetDateTime): Boolean {
@@ -83,7 +97,8 @@ data class PatchEventRequest(
     @SerializedName("end") val end: EventDateTime? = null,
     @SerializedName("location") val location: String? = null,
     @SerializedName("description") val description: String? = null,
-    @SerializedName("attendees") val attendees: List<Attendee>? = null
+    @SerializedName("attendees") val attendees: List<Attendee>? = null,
+    @SerializedName("colorId") val colorId: String? = null
 )
 
 data class InsertEventRequest(
@@ -94,5 +109,6 @@ data class InsertEventRequest(
     @SerializedName("description") val description: String? = null,
     /** Only ever populated with addresses already verified against Boaz's own phone contacts
      * (see CommandExecutor.createCalendarEvent) - never a raw/guessed address. */
-    @SerializedName("attendees") val attendees: List<Attendee>? = null
+    @SerializedName("attendees") val attendees: List<Attendee>? = null,
+    @SerializedName("colorId") val colorId: String? = null
 )

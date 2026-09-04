@@ -4,6 +4,14 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.4.0 — 2026-09-04
+
+**Event colors — set or change a meeting's color by voice.**
+- Previously a deliberate, documented non-feature: the system prompt explicitly told Claude not to bring up event color at all, so asking directly correctly got "I can't do that." Now genuinely built: `create_calendar_event` and `update_calendar_event` both accept a color, using Google Calendar's fixed 11-color palette (Lavender, Sage, Grape, Flamingo, Banana, Tangerine, Peacock, Graphite, Blueberry, Basil, Tomato) - there's no arbitrary/free-form color, so a casual request ("make it red," "turn it green") is mapped by Claude to the closest one of those 11. Verified live: "make it green" correctly resolved to Basil.
+- Like every other real change, this is confirmed out loud before it happens - "for '[event]', do you want me to change its color to [name]?"
+
+---
+
 ## 0.3.2 — 2026-09-03
 
 **Long spoken answers cutting off mid-sentence, fixed.**
