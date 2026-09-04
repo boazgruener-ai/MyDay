@@ -749,7 +749,7 @@ fun MainScreen(
                             modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                         )
                         NavigationDrawerItem(
-                            label = { Text("Run Email Cleanup Now") },
+                            label = { Text("Run Email Cleanup (Last 3 Days)") },
                             selected = false,
                             onClick = {
                                 runManualAction("Email Cleanup", workName = "email_cleanup_manual") {

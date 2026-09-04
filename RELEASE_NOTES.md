@@ -4,6 +4,13 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.4.5 — 2026-09-04
+
+**Renamed "Run Email Cleanup Now" to "Run Email Cleanup (Last 3 Days)".**
+- With the new 30-day deep-run sitting right next to it in the menu, "Now" didn't say what it actually does (or didn't do - only new, unReviewed mail from the last 3 days). Matches the new item's naming pattern so the two options read clearly side by side.
+
+---
+
 ## 0.4.4 — 2026-09-04
 
 **The Reviewed-backlog bug also hit Payments - generalized the fix, plus a manual 30-day deep-cleanup run.**
