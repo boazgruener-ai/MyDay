@@ -45,6 +45,11 @@ private const val TAG = "MydayEmailCleanup"
  * deterministic user instructions, just keyed on sender/subject text instead - filing something
  * into one of those doesn't conflict with the allowlist's actual promise ("never treated as
  * promotion/junk").
+ *
+ * A second pass, [sweepBacklogForNewCategories], reprocesses mail for the Jobs/Google-
+ * Notifications categories regardless of the Reviewed label - added after those categories
+ * shipped, when mail that arrived earlier (already Reviewed+Kept under the old rules) turned out
+ * to be permanently unreachable by the main loop above otherwise.
  */
 class EmailCleanupWorker(
     context: Context,
@@ -75,12 +80,19 @@ class EmailCleanupWorker(
                 container.classificationLogStore,
                 token
             )
+            // Catches mail already marked Reviewed under older rules, before Jobs/Google-
+            // Notifications existed - run after the main pass so a brand-new matching email
+            // gets counted once, by the main loop, not twice.
+            val (backlogJobs, backlogGoogleNotifications) = sweepBacklogForNewCategories(container.gmailRepository, token)
+            val totalJobs = counts.jobs + backlogJobs
+            val totalGoogleNotifications = counts.googleNotifications + backlogGoogleNotifications
+
             harvestContactHints(container.gmailRepository, container.contactHintsStore, token)
-            if (counts.processed > 0) {
+            if (counts.processed > 0 || backlogJobs > 0 || backlogGoogleNotifications > 0) {
                 container.activityLogStore.appendEntry(
                     "Checked ${counts.processed} email(s): ${counts.promotions} filed as promotion, " +
-                        "${counts.junk} as junk, ${counts.payments} as payment, ${counts.jobs} as job, " +
-                        "${counts.googleNotifications} as Google notification."
+                        "${counts.junk} as junk, ${counts.payments} as payment, $totalJobs as job, " +
+                        "$totalGoogleNotifications as Google notification."
                 )
             }
             Result.success(
@@ -89,14 +101,67 @@ class EmailCleanupWorker(
                     WorkResultKeys.PROMOTIONS to counts.promotions,
                     WorkResultKeys.JUNK to counts.junk,
                     WorkResultKeys.PAYMENTS to counts.payments,
-                    WorkResultKeys.JOBS to counts.jobs,
-                    WorkResultKeys.GOOGLE_NOTIFICATIONS to counts.googleNotifications
+                    WorkResultKeys.JOBS to totalJobs,
+                    WorkResultKeys.GOOGLE_NOTIFICATIONS to totalGoogleNotifications
                 )
             )
         } catch (e: Exception) {
             Log.e(TAG, "Cleanup run failed", e)
             Result.retry()
         }
+    }
+
+    /**
+     * Reprocesses still-in-inbox mail that isn't yet filed as Jobs or Google-Notifications,
+     * regardless of the Reviewed label - the main loop above only looks at unReviewed mail, so a
+     * category added after some matching mail already arrived (and got Reviewed+Kept under the
+     * old rules) can otherwise never reach it. Runs every cycle rather than once: cheap (pure
+     * string checks, no LLM calls), and each label exclusion below means anything already filed
+     * is never rechecked, so this naturally converges rather than reprocessing forever. Capped at
+     * 200 candidates per run as a defensive bound, not a real limit for a personal inbox.
+     */
+    private suspend fun sweepBacklogForNewCategories(gmail: GmailRepository, token: String): Pair<Int, Int> {
+        val candidates = try {
+            gmail.search(
+                token,
+                query = "in:inbox -label:\"${GmailLabels.JOBS}\" -label:\"${GmailLabels.GOOGLE_NOTIFICATIONS}\"",
+                maxResults = 200
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Backlog sweep search failed", e)
+            return 0 to 0
+        }
+        if (candidates.isEmpty()) return 0 to 0
+
+        val jobsLabelId = gmail.getOrCreateLabel(token, GmailLabels.JOBS)
+        val googleNotificationsLabelId = gmail.getOrCreateLabel(token, GmailLabels.GOOGLE_NOTIFICATIONS)
+        val reviewedLabelId = gmail.getOrCreateLabel(token, GmailLabels.REVIEWED)
+
+        var jobs = 0
+        var googleNotifications = 0
+        for (message in candidates) {
+            val from = message.headerValue("From") ?: ""
+            val subject = message.headerValue("Subject") ?: ""
+            when {
+                isJobRelatedMail(from, subject) -> {
+                    gmail.modifyLabels(
+                        token, message.id,
+                        addLabelIds = listOf(jobsLabelId, reviewedLabelId),
+                        removeLabelIds = listOf("INBOX")
+                    )
+                    jobs++
+                }
+                isGoogleNotificationSender(from) -> {
+                    gmail.modifyLabels(
+                        token, message.id,
+                        addLabelIds = listOf(googleNotificationsLabelId, reviewedLabelId),
+                        removeLabelIds = listOf("INBOX")
+                    )
+                    googleNotifications++
+                }
+            }
+        }
+        return jobs to googleNotifications
     }
 
     private data class CleanupCounts(
@@ -222,7 +287,9 @@ class EmailCleanupWorker(
      * swissre-jobnotification@...). Checked against the sender first since that's the reliable
      * signal; "job alert" in the subject is a secondary catch-all for senders that don't match
      * one of those exact patterns. */
-    private val JOB_SENDER_PATTERNS = listOf("jobalert", "jobs.ch", "jobnotification", "job-notification")
+    private val JOB_SENDER_PATTERNS = listOf(
+        "jobalert", "jobs.ch", "jobnotification", "job-notification", "careers", "jobgether"
+    )
 
     private fun isJobRelatedMail(from: String, subject: String): Boolean =
         JOB_SENDER_PATTERNS.any { from.contains(it, ignoreCase = true) } ||

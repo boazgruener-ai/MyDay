@@ -4,6 +4,15 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.4.3 — 2026-09-04
+
+**Jobs/Google-Notifications missing real mail, fixed - two separate bugs.**
+- **Backlog stuck behind the Reviewed label.** The main cleanup query only looks at mail not yet marked `Myday/Reviewed`; every one of the reported emails had already been Reviewed+Kept under the old rules, before these two categories existed, which made them permanently unreachable by the new logic. Added a second pass, `sweepBacklogForNewCategories`, that reprocesses still-in-inbox mail for just these two categories regardless of the Reviewed label - runs every cycle, cheap (no LLM calls), and naturally stops touching anything once it's been filed. This also means any *future* new deterministic category won't hit the same wall.
+- **Two genuine pattern gaps.** `noreply_careers@elca.ch` (a company's own careers address, no "job" substring at all) and `support@match.jobgether.com` (the domain is `jobgether.com`, not `jobs.ch`/`jobnotification`) matched nothing. Added `careers` and `jobgether` to the sender-pattern list.
+- `accounts.google.com` mail was already correctly matched by the existing pattern - its failure was purely the Reviewed-backlog issue above, not a pattern bug.
+
+---
+
 ## 0.4.2 — 2026-09-04
 
 **New auto-filing category: Google's own notification emails, filed to Myday/Google-Notifications.**
