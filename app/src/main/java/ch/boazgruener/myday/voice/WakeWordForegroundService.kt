@@ -34,6 +34,8 @@ import com.rementia.openwakeword.lib.model.WakeWordModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +44,8 @@ import java.time.LocalTime
 private const val TAG = "MydayWakeWord"
 private const val CHANNEL_ID = "wake_word_listener"
 private const val NOTIFICATION_ID = 1001
+/** See [WakeWordForegroundService.withDelayedAck]. */
+private const val ACK_DELAY_MS = 4000L
 /**
  * Voice-based "Stop" during a long response is fundamentally unreliable - recognizing one word
  * correctly while it overlaps with the phone's own simultaneous speech output is a hard
@@ -245,6 +249,8 @@ class WakeWordForegroundService : Service() {
         val normalized = reply.trim().lowercase()
         val isShort = normalized.split(Regex("\\s+")).size <= 4
         when {
+            // runBriefing times its own work and speaks "one moment" only if it's actually
+            // taking a while (see withDelayedAck) - no separate handling needed here.
             isShort && BRIEF_OFFER_YES_PHRASES.any { normalized.startsWith(it) } -> runBriefing()
             isShort && BRIEF_OFFER_NO_PHRASES.any { normalized.startsWith(it) } -> {} // declined - stay quiet, proceed to normal listening
             else -> runCommand(reply, mutableListOf())
@@ -320,21 +326,12 @@ class WakeWordForegroundService : Service() {
             // sttListener.listenOnce here specifically - see CloudSttListener's doc comment for
             // why. sttListener itself is untouched and still used for confirmAction() prompts and
             // the "Stop" barge-in check, both fine with the old behavior.
-            // The "one moment" acknowledgment (if any) is spoken from inside listenOnce itself,
-            // the instant silence is detected - in parallel with the Cloud STT network call, not
-            // after it - so the wait Boaz perceives is the transcription+processing time alone
-            // rather than that time stacked on top of a separate post-transcript delay. It fires
-            // based on how much speech was actually captured, not on the transcript (which
-            // doesn't exist yet at that point): short utterances ("stop", "thanks", "that's
-            // all") stay silent, matching the requirement that quick replies/clarifications never
-            // get a "one moment" prefix; longer ones almost always mean real tool-calling work is
-            // coming. See CloudSttListener.MIN_SPEECH_DURATION_FOR_ACK_MS.
-            val transcript = cloudSttListener.listenOnce(biasingHints) { speechDurationMs ->
-                if (speechDurationMs >= MIN_SPEECH_DURATION_FOR_ACK_MS) {
-                    voiceStateStore.set(VoiceState.SPEAKING)
-                    ttsSpeaker.speak("Okay, one moment.")
-                }
-            } ?: continue
+            // The "one moment" acknowledgment, if any, is no longer decided here at all - it used
+            // to fire based on how long Boaz's utterance was, which doesn't actually predict how
+            // much backend work follows (confirmed live: a brisk "what's my next meeting" still
+            // needs a real Calendar+Claude round trip). runCommand/runBriefing below now time the
+            // actual work instead - see withDelayedAck.
+            val transcript = cloudSttListener.listenOnce(biasingHints) ?: continue
             Log.d(TAG, "Heard: $transcript")
 
             if (isSessionEndPhrase(transcript)) {
@@ -373,7 +370,9 @@ class WakeWordForegroundService : Service() {
         voiceStateStore.set(VoiceState.PROCESSING)
         val token = getAccessTokenOrSpeakError(failureContext = "get your briefing") ?: return
         try {
-            val briefingText = dailyBriefingUseCase.buildBriefing(token, locationProvider.getLastKnownLocation())
+            val briefingText = withDelayedAck {
+                dailyBriefingUseCase.buildBriefing(token, locationProvider.getLastKnownLocation())
+            }
             speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore, briefingText)
         } catch (e: MissingApiKeyException) {
             speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore,
@@ -388,8 +387,10 @@ class WakeWordForegroundService : Service() {
         voiceStateStore.set(VoiceState.PROCESSING)
         val token = getAccessTokenOrSpeakError(failureContext = "help with that") ?: return
         try {
-            val answer = commandExecutor.handle(transcript, token, ttsSpeaker, sttListener, conversationHistory)
-            speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore,answer)
+            val answer = withDelayedAck {
+                commandExecutor.handle(transcript, token, ttsSpeaker, sttListener, conversationHistory)
+            }
+            speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore, answer)
         } catch (e: MissingApiKeyException) {
             speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore,
                 "You don't have an Anthropic API key set up. Please open Myday and add one.")
@@ -397,6 +398,29 @@ class WakeWordForegroundService : Service() {
             Log.e(TAG, "Command handling failed", e)
             speakInterruptibly(ttsSpeaker, sttListener, voiceStateStore,"Sorry, I ran into a problem with that.")
         }
+    }
+
+    /**
+     * Runs [block], speaking "Okay, one moment." only if it hasn't finished within
+     * [ACK_DELAY_MS] - mirrors the delayed-reveal pattern MainActivity uses for manual-run
+     * results (see MANUAL_RUN_LOADING_GRACE_MS there). Replaces an earlier attempt that guessed
+     * from how long Boaz's utterance was, which didn't actually predict processing time at all;
+     * timing the real work is the only signal that does. Boaz's own stated rule: skip the ack
+     * under ~3-4s, make sure it fires above ~5s - ACK_DELAY_MS sits in between.
+     */
+    private suspend fun <T> withDelayedAck(block: suspend () -> T): T = coroutineScope {
+        val work = async { block() }
+        val ackJob = launch {
+            delay(ACK_DELAY_MS)
+            if (work.isActive) {
+                voiceStateStore.set(VoiceState.SPEAKING)
+                ttsSpeaker.speak("Okay, one moment.")
+                voiceStateStore.set(VoiceState.PROCESSING)
+            }
+        }
+        val result = work.await()
+        ackJob.cancel()
+        result
     }
 
     /** Returns a fresh access token, or null after already speaking an error to the user. */

@@ -14,7 +14,6 @@ import android.util.Log
 import ch.boazgruener.myday.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -35,17 +34,6 @@ private const val SAMPLE_RATE = 16000
  * unreliable judgment with a simple energy-based check we fully control instead.
  */
 private const val SILENCE_THRESHOLD_MS = 2500L
-/**
- * How much actual speech (excluding the trailing pause) has to be captured before we treat the
- * utterance as a substantial request worth an immediate "one moment" acknowledgment - fired the
- * instant capture ends, in parallel with the Cloud STT call, so the delay Boaz perceives is the
- * transcription+processing time rather than transcription+processing stacked on top of silence-
- * wait. We can't inspect the transcript yet at that point (it doesn't exist until the network call
- * returns), so duration is a proxy: short utterances ("stop", "thanks", "that's all") skip the
- * ack entirely, matching the earlier requirement that quick replies/clarifications never get a
- * "one moment" prefix; longer ones almost always mean real tool-calling work is coming.
- */
-const val MIN_SPEECH_DURATION_FOR_ACK_MS = 2500L
 /** How long to wait for speech to begin at all before giving up (mirrors "nothing heard"). */
 private const val INITIAL_NO_SPEECH_TIMEOUT_MS = 8000L
 /** Hard ceiling regardless of silence detection, so a stuck/misdetected session can't run forever. */
@@ -98,17 +86,13 @@ class CloudSttListener(private val context: Context) {
      * transcribes it. Returns null on no permission, no speech detected at all, or an API error -
      * callers should treat this exactly like [SttListener.listenOnce] returning null.
      *
-     * [onCaptureComplete] fires the instant silence is detected (audio capture done), before the
-     * Cloud STT network call begins, with how much speech (in ms) was actually captured. It runs
-     * CONCURRENTLY with that network call (not before it) - callers use this to speak an
-     * immediate "one moment" acknowledgment for longer utterances while transcription happens in
-     * the background, so the perceived wait is the network/processing time alone rather than
-     * silence-wait stacked on top of it. This function still waits for that callback to finish
-     * before returning, so a spoken ack can't overlap with whatever comes next.
+     * No longer speaks its own "one moment" acknowledgment here - a duration-of-speech heuristic
+     * (how long Boaz spoke) turned out not to predict how much backend work follows at all (a
+     * brisk short command can still need a real Calendar+Claude round trip). Callers now time the
+     * actual processing work instead - see WakeWordForegroundService.withDelayedAck.
      */
     suspend fun listenOnce(
-        biasingHints: List<String> = emptyList(),
-        onCaptureComplete: suspend (speechDurationMs: Long) -> Unit = {}
+        biasingHints: List<String> = emptyList()
     ): String? = coroutineScope {
         if (BuildConfig.GOOGLE_MAPS_API_KEY.isBlank()) return@coroutineScope null
 
@@ -150,8 +134,6 @@ class CloudSttListener(private val context: Context) {
             return@coroutineScope null
         }
 
-        val ackJob = launch { onCaptureComplete(captured.speechDurationMs) }
-
         val response = try {
             withContext(Dispatchers.IO) {
                 api.recognize(
@@ -173,10 +155,8 @@ class CloudSttListener(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Speech-to-Text request failed", e)
-            ackJob.join()
             return@coroutineScope null
         }
-        ackJob.join()
 
         // Google's server-side recognition can split ONE captured clip into multiple results[]
         // entries when it detects internal pauses (its own segmentation, separate from - and

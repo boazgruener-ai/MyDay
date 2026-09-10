@@ -4,6 +4,15 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.4.6 — 2026-09-10
+
+**"Working on your request" silence, fixed properly - replaced a broken heuristic with a real one.**
+- Reported live: saying "yes" to the daily brief offer while driving produced long dead silence before the brief started, with no "one moment" acknowledgment - and the same silence sometimes happened on ordinary short commands too.
+- Root cause, in two parts. First, the daily-brief "yes" reply never had any acknowledgment logic wired to it at all - it went straight into a full weather+calendar+email+Claude round trip with nothing spoken the entire time. Second, the general conversation loop's ack *did* exist, but was gated on how long Boaz's own utterance was (over 2.5s of speech = ack, under = silence) - a heuristic that doesn't actually predict how much backend work follows. A brisk "what's my next meeting" is short to say but still needs a real Calendar+Claude round trip.
+- Replaced the speech-duration guess entirely with a timer on the *actual processing work* - mirrors the same delayed-reveal pattern already used for manual-run results in the app UI. The "one moment" only fires if the real work hasn't finished within a few seconds, and never fires at all if it resolves quickly - matching the explicit rule this was built to: skip the ack under ~3-4s, make sure it fires above ~5s. One shared mechanism now covers both the daily brief and every ordinary command, rather than two different (and one entirely missing) implementations.
+
+---
+
 ## 0.4.5 — 2026-09-04
 
 **Renamed "Run Email Cleanup Now" to "Run Email Cleanup (Last 3 Days)".**
