@@ -125,7 +125,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -148,6 +150,40 @@ private suspend fun runWorkAndAwaitResult(context: Context, uniqueName: String, 
     return workManager.getWorkInfosForUniqueWorkFlow(uniqueName)
         .mapNotNull { infos -> infos.firstOrNull { it.state.isFinished } }
         .first()
+}
+
+/** "Xm Ys" (or just "Ys" under a minute) for a rough remaining-time estimate. */
+private fun formatRemainingDuration(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s"
+}
+
+/**
+ * Live progress text for a running [EmailCleanupWorker] instance (see its PROGRESS_CURRENT/
+ * PROGRESS_TOTAL) - a multi-minute deep run otherwise gives no sign it's actually making
+ * progress versus stuck. [startTime] is captured once, at flow-creation time, so every emission
+ * extrapolates a remaining-time estimate from the same fixed baseline rather than drifting.
+ * The estimate only appears once a few items have been processed (an extrapolation from 1-2
+ * samples is too noisy to be worth showing).
+ */
+private fun emailCleanupProgressFlow(context: Context, uniqueName: String): Flow<String> {
+    val startTime = System.currentTimeMillis()
+    return WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(uniqueName)
+        .mapNotNull { infos -> infos.firstOrNull() }
+        .map { info ->
+            val current = info.progress.getInt(EmailCleanupWorker.PROGRESS_CURRENT, 0)
+            val total = info.progress.getInt(EmailCleanupWorker.PROGRESS_TOTAL, 0)
+            if (total <= 0) return@map "Working on it…"
+            val percent = (current * 100) / total
+            val base = "Checked $current of $total email(s) ($percent%)"
+            if (current < 3) return@map base
+            val elapsedMs = System.currentTimeMillis() - startTime
+            val estimatedTotalMs = (elapsedMs.toDouble() / current) * total
+            val remainingMs = (estimatedTotalMs - elapsedMs).toLong().coerceAtLeast(0)
+            "$base — about ${formatRemainingDuration(remainingMs)} remaining"
+        }
 }
 
 private fun networkConstraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
@@ -385,12 +421,19 @@ fun MainScreen(
     var manualRunResultText by remember { mutableStateOf<String?>(null) }
     var manualRunJob by remember { mutableStateOf<Job?>(null) }
     var manualRunWorkName by remember { mutableStateOf<String?>(null) }
+    // Live status text for a run with a progressFlow (currently just the 30-day email cleanup) -
+    // shown instead of the plain "Working on it…" while non-null.
+    var manualRunProgressText by remember { mutableStateOf<String?>(null) }
+    var manualRunProgressJob by remember { mutableStateOf<Job?>(null) }
 
     fun dismissManualRunDialog() {
         manualRunResultTitle = null
         manualRunResultText = null
         manualRunJob = null
         manualRunWorkName = null
+        manualRunProgressText = null
+        manualRunProgressJob?.cancel()
+        manualRunProgressJob = null
     }
 
     /**
@@ -400,8 +443,16 @@ fun MainScreen(
      * [MANUAL_RUN_LOADING_GRACE_MS]; if it finishes before that, the dialog appears once, already
      * showing the result, with no loading flash at all. [workName] (for WorkManager-backed
      * actions) lets Abort actually cancel the underlying background work, not just stop waiting.
+     * [progressFlow], if given, feeds live status text into the dialog while it's still working -
+     * for a run that can genuinely take minutes (see emailCleanupProgressFlow), a static "working
+     * on it" gives no way to tell real progress from a stall.
      */
-    fun runManualAction(title: String, workName: String? = null, action: suspend () -> String) {
+    fun runManualAction(
+        title: String,
+        workName: String? = null,
+        progressFlow: Flow<String>? = null,
+        action: suspend () -> String
+    ) {
         closeDrawer()
         val deferred = scope.async {
             try {
@@ -414,6 +465,12 @@ fun MainScreen(
         }
         manualRunJob = deferred
         manualRunWorkName = workName
+        manualRunProgressText = null
+        manualRunProgressJob = progressFlow?.let { flow ->
+            scope.launch {
+                flow.collect { text -> if (manualRunJob === deferred) manualRunProgressText = text }
+            }
+        }
         scope.launch {
             delay(MANUAL_RUN_LOADING_GRACE_MS)
             if (manualRunJob === deferred && deferred.isActive) {
@@ -425,6 +482,9 @@ fun MainScreen(
             val result = deferred.await()
             manualRunResultTitle = title
             manualRunResultText = result
+            manualRunProgressText = null
+            manualRunProgressJob?.cancel()
+            manualRunProgressJob = null
         }
     }
 
@@ -766,7 +826,11 @@ fun MainScreen(
                             label = { Text("Run Email Cleanup (Last 30 Days)") },
                             selected = false,
                             onClick = {
-                                runManualAction("Email Cleanup (30 Days)", workName = "email_cleanup_deep_manual") {
+                                runManualAction(
+                                    "Email Cleanup (30 Days)",
+                                    workName = "email_cleanup_deep_manual",
+                                    progressFlow = emailCleanupProgressFlow(context, "email_cleanup_deep_manual")
+                                ) {
                                     val info = runWorkAndAwaitResult(
                                         context, "email_cleanup_deep_manual",
                                         OneTimeWorkRequestBuilder<EmailCleanupWorker>()
@@ -1042,7 +1106,7 @@ fun MainScreen(
                             modifier = Modifier.padding(top = 16.dp)
                         ) {
                             CircularProgressIndicator(modifier = Modifier.padding(end = 12.dp))
-                            Text("Working on it…", style = MaterialTheme.typography.bodyMedium)
+                            Text(manualRunProgressText ?: "Working on it…", style = MaterialTheme.typography.bodyMedium)
                         }
                         Button(
                             onClick = {

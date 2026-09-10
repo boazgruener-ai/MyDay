@@ -67,6 +67,15 @@ class EmailCleanupWorker(
          * the standard 3-day, unReviewed-only window. */
         const val INPUT_DAYS_BACK = "days_back"
         const val INPUT_INCLUDE_REVIEWED = "include_reviewed"
+
+        /** Progress-data keys (see [CoroutineWorker.setProgress]) - MainActivity observes these
+         * live via WorkManager's own progress Flow to show real feedback on a multi-minute deep
+         * run, rather than an undifferentiated "working on it" for several minutes straight. Only
+         * reported during the main classification loop (the slow part - up to 200 messages, each
+         * possibly needing its own Claude call); the much faster backlog sweep afterward isn't
+         * separately tracked. */
+        const val PROGRESS_CURRENT = "progress_current"
+        const val PROGRESS_TOTAL = "progress_total"
     }
 
     override suspend fun doWork(): Result {
@@ -247,7 +256,7 @@ class EmailCleanupWorker(
         val logEntries = mutableListOf<ClassificationLogEntry>()
         val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
 
-        for (message in messages) {
+        for ((index, message) in messages.withIndex()) {
             val from = message.headerValue("From") ?: ""
             val subject = message.headerValue("Subject") ?: "(no subject)"
 
@@ -297,6 +306,7 @@ class EmailCleanupWorker(
             }
             gmail.modifyLabels(token, message.id, addLabelIds = addLabels, removeLabelIds = removeLabels)
             logEntries.add(ClassificationLogEntry(from, subject, categoryLabel, now))
+            setProgress(workDataOf(PROGRESS_CURRENT to index + 1, PROGRESS_TOTAL to messages.size))
         }
         classificationLogStore.appendEntries(logEntries)
         return CleanupCounts(messages.size, promotions, junk, payments, jobs, googleNotifications)

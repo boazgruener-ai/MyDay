@@ -4,6 +4,15 @@ Versioning follows `versionName`/`versionCode` in [app/build.gradle.kts](app/bui
 
 ---
 
+## 0.4.7 — 2026-09-10
+
+**Live progress for the 30-day email cleanup, instead of a static "working on it" for 5-6 minutes.**
+- The deep run can process up to 200 emails, some needing their own Claude classification call - genuinely a several-minute run, during which the manual-run dialog previously just said "Working on it…" the entire time, indistinguishable from a stall.
+- The worker now reports progress via WorkManager's own progress mechanism (`setProgress`) after each email; the dialog observes it live and shows "Checked 84 of 187 email(s) (44%) — about 2m 10s remaining", updating continuously. The remaining-time estimate only appears after a few emails have been processed (extrapolating from 1-2 is too noisy to be useful) and is a simple linear projection from elapsed time so far.
+- Every other manual run is unaffected - this only applies where a progressFlow is actually wired in.
+
+---
+
 ## 0.4.6 — 2026-09-10
 
 **"Working on your request" silence, fixed properly - replaced a broken heuristic with a real one.**
